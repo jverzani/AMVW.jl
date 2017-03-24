@@ -1,5 +1,9 @@
 using AMVW
 using Base.Test
+using Polynomials
 
-# write your own tests here
-@test 1 == 2
+rs = [1.0, 2, 3]
+state = AMVW.amvw(poly(rs).a)
+println("Mathcing?")
+println(rs)
+println(complex.(state.REIGS, state.IEIGS))
