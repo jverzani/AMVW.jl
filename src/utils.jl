@@ -19,30 +19,6 @@ end
 #
 function quadratic_equation{T}(a::T, b::T, c::T)   
     qdrtc(a, -(0.5)*b, c)
-    # discr = b^2 - 4.0 * c
-    
-    # if sign(discr) < 0
-    #     e1r, e1i  = b/2.0, sqrt(-discr)/2.0
-    #     e2r, e2i = e1r, - e1i
-    #     return e1r, e1i, e2r,e2i
-    # else
-    #     e1i = e2i = zero(T)  # real
-
-    #     sdiscr = sqrt(discr)
-    #     u, v = b + sdiscr, b - sdiscr
-
-        
-    #     if iszero(u) || iszero(v)
-    #         u, v = zero(T), zero(T)
-    #     elseif abs(u) > abs(v)
-    #         u = u / 2.0
-    #         v = c / u
-    #     else
-    #         v = v / 2.0
-    #         u = c / v
-    #     end
-    #     return u, e1i, v, e2i
-    # end
 end
 
 ## Kahan quadratic equation with fma
@@ -81,6 +57,7 @@ end
 
 ##
 # solve degree 2 or less case
+## COMPLEX VALUSE XXX
 function solve_simple_cases(state)
 #    println("Simple case setting eigen value")
     if N == 0

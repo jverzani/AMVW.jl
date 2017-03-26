@@ -47,7 +47,6 @@ function Base.full{T}(state::ShiftType{T}, what=:A)
     Q = as_full(state.Q[1],N+1); for i in 2:N Q = Q * as_full(state.Q[i],N+1) end
     Ct = as_full(state.Ct[1], N+1); for i in 2:N Ct =  as_full(state.Ct[i],N+1)*Ct end
     B = as_full(state.B[1],N+1); for i in 2:N B = B * as_full(state.B[i],N+1) end
-    D = dmatrix(state)
     
     #    x = -vcat(state.POLY[2:state.N], state.POLY[1], 1)
     par = iseven(state.N) ? one(T) : -one(T)
@@ -62,7 +61,7 @@ function Base.full{T}(state::ShiftType{T}, what=:A)
     # yt = -1/rho * transpose(en1) * Ct * B * state.D[end]
     ## we have 0 = e_{n+1}^T * D * C^* (B + e_1 * y^T), which allow us to solve for y^T:
     rho = transpose(en1) * Ct * e1  # scalar 
-    yt = -1/rho * transpose(en1)  * Ct * B * D
+    yt = -1/rho * transpose(en1)  * Ct * B 
     
     # en1 = zeros(T, state.N+1); en1[state.N+1] = one(T)
     # rho = en1' * Ct * e1
@@ -74,11 +73,11 @@ function Base.full{T}(state::ShiftType{T}, what=:A)
         end
     end
     
-    ## we have R = Z + x = Ct * (B*D + e1 * yt)
-    Z = Ct * B * D
+    ## we have R = Z + x = Ct * (B + e1 * yt)
+    Z = Ct * B 
     zero_out!(Z)
     
-    x = Ct * e1 * yt # no D here
+    x = Ct * e1 * yt 
     
     R = Z + x
     zero_out!(R)
@@ -91,7 +90,7 @@ end
 
 
 # simple graphic to show march of algorithm
-function show_status{T}(state::RealDoubleShift{T})
+function show_status{T}(state::ShiftType{T})
     x = fill(".", state.N+2)
     x[state.ctrs.zero_index+1] = "α"
     x[state.ctrs.start_index+1] = "x"

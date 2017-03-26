@@ -37,7 +37,7 @@ end
 # to get what we want, a real s part, not s part
 function givensrot{T <: Real}(a::Complex{T},b::Complex{T})
     G, r = givens(b, a, 1, 2)
-    G.s, -real(G.c), r
+    G.s, -G.c, r
 end
 givensrot{T <: Real}(a::Complex{T},b::T) = givensrot(a, complex(b, zero(T)))
 
@@ -62,19 +62,14 @@ function getd{T}(a::RealRotator{T})
     sign(c)
 end
 
+
 ## For complex, A "D" matrix is of type Di=[alpha 0; 0 conj(alpha)] We have to
-
-## we have after absorb:
 #
-#  Q             Q              Q               D Q
-#    Q      -->    Q      -->    D Q   -->    D     Q
-#      Q U           D Q       D     Q      D         Q
+# D    -->    D
+#   U      U 
+is_diagonal{T}(r::ComplexRotator{T}) = norm(r.s) <= eps(T)
+is_identity{T}(r::ComplexRotator{T}) = r.c == one(Complex{T})
 
-# we have this on deflation
-#
-#  Q           Q              D Q
-#    Q    -->    D Q  ---> D       Q    (as above, need to move D's up the chain)
-#      DI       D    I         D     I
 
 # (After absorbtion we leave an I for Q, not "D" matrix as in real case)
 
@@ -85,90 +80,38 @@ end
 
 
 """
-performs operations formoving a diagonal matrix past Q to the left
-
-Q           D Q
-  D  ---> D
-
-The product of the D's is just [alpha 0 0; 0 1 0; 0 0 conj(alpha)], but we keep
-separate here, though, we could have
-
-I Qi Qi1 Qi2 ... Qj D --> D' Pi1 Pi2 ... Pj where Pi.c = Qi.c*conj(alpha);
-D'[i,i]=alpha, D[j+1,j+1] = conj(alpha), o/w eye(N)
+   D  --> D
+U           V
 """
 function Dflip{T}(r::ComplexRotator{T}, d::ComplexRotator{T})
     is_identity(r) && error("check first for this case")
     !is_diagonal(d) && error("d must be diagonal rotator")
 
-    u,v = A.vals(r)
-    alpha, tmp = A.vals(d)
-
-    A.vals!(r, u*conj(alpha), v)
-    A.vals!(d, alpha, tmp)
-    di = ComplexRotator(real(alpha), imag(alpha), zero(T), r.i)
-    di
+    # D is fixed,
+    alpha = d.c
+    r.s = r.s * conj(alpha)
 end
-is_diagonal{T}(r::ComplexRotator{T}) = abs(r.s) <= eps(T)
-is_identity{T}(r::ComplexRotator{T}) = r.cr == one(T)
 
-
-
-## For complex case, we need to pass rotator through a diagonal (D), stored as a vector
-function passthrough{T}(D::AbstractVector{Complex{T}}, r::ComplexRotator{T})
-    d,e = D[1:2]  # QUestion, pass view or pass state.D?
-    D[1], D[2] = e, d
-    c,s = vals(r)
-    c = c * d * conj(e)
-    vals!(r, c, s)
-end
-    
-    
 
 
 ## fuse combines two rotations, a and b, into one,
+## XXX If using complex rotators with real sine part, need a diagonal matrix
+## coming out of this
+
 # Had switch forVal{:left} updates a, Val{:right} updates b; but this is faster
 ## 
-function fuse{T}(a::RealRotator{T}, b::RealRotator{T},::Type{Val{:left}})
+function fuse{T}(a::Rotator{T}, b::Rotator{T},::Type{Val{:left}})
     #    idx(a) == idx(b) || error("can't fuse")
-    u = a.c * b.c - a.s * b.s
-    a.s = a.c * b.s + a.s * b.c
+    u = a.c * b.c - conj(a.s) * b.s
+    a.s = conj(a.c) * b.s + a.s * b.c
     a.c = u
 end
-function fuse{T}(a::RealRotator{T}, b::RealRotator{T}, ::Type{Val{:right}})
+function fuse{T}(a::Rotator{T}, b::Rotator{T}, ::Type{Val{:right}})
 #    idx(a) == idx(b) || error("can't fuse")
-    u = a.c * b.c - a.s * b.s
-    b.s = a.c * b.s + a.s * b.c
+    u = a.c * b.c - conj(a.s) * b.s
+    b.s = conj(a.c) * b.s + a.s * b.c
     b.c = u
 end
-
-## Complex fuse must send back phase information to keep
-## in the proper form, this is `phi`.
-function _fuse{T}(a::ComplexRotator{T}, b::ComplexRotator{T})
-    #    idx(a) == idx(b) || error("can't fuse")
-    c1,s1 = vals(a)
-    c2,s2 = vals(b)
-    u = c1 * c2 - s1 * s2
-    v = c1 * s2 + conj(c2) * s1
-    nrmv = norm(v)  #XXX
-    phi = conj(v)/nrmv
-    u = u*phi
-    real(u), imag(u), nrmv, conj(phi)
-end
-
-# U *V -? fUV * D(conj(phi)) (on left)
-function fuse{T}(a::ComplexRotator{T}, b::ComplexRotator{T},::Type{Val{:left}})
-    a.cr, a.ci, a.s, phi = _fuse(a, b)
-    conj(phi)
-end
-
-# U * V -> D(phi) * fUV (:right)
-function fuse{T}(a::ComplexRotator{T}, b::ComplexRotator{T},::Type{Val{:right}})
-    b.cr, b.ci, b.s, phi = _fuse(a, b)
-    phi
-end
-
-
-
 
 
 # Turnover: Q1    Q3   | x x x |      Q1
@@ -178,8 +121,10 @@ end
 # misfit is Val{:right} for <-- (right to left turnover), Val{:left} for -->
 #
 # This is the key computation once matrices are written as rotators
-
-function _turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T})
+## XXX we wrote this for complex rotators where sine part may be complex
+# can trim down a bit if not the case, as we don't need to fuss with alpha, beta below
+##function _turnover{T}(Q1::ComplexRotator{T}, Q2::ComplexRotator{T}, Q3::ComplexRotator{T})
+function _turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T})    
 #    i,j,k = idx(Q1), idx(Q2), idx(Q3)
 #    (i == k) || error("Need to have a turnover up down up or down up down: have i=$#i, j=$j, k=$k")
 #    abs(j-i) == 1 || error("Need to have |i-j| == 1")
@@ -194,17 +139,20 @@ function _turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T})
     # initialize c4 and s4
     a = conj(c1)*c2*s3 + s1*c3 
     b = s2*s3
-
     # check norm([a,b]) \approx 1    
-    c4, s4, nrm = givensrot(a,b)#, Val{true})
+    c4, s4, temp = givensrot(a,b)#, Val{true})
 
     # initialize c5 and s5
 
     a = c1*c3 - conj(s1)*c2*s3
-    b = nrm
+    b = temp
     # check norm([a,b]) \approx 1
-    c5, s5, tmp = givensrot(a,b)
+    c5, s5, alpha = givensrot(a, b)
 
+    alpha = alpha/norm(alpha)
+    c5 *= conj(alpha) # make diagonal elements 1
+    s5 *= alpha
+    
     # second column
     u = -c1*conj(s3) - conj(s1)*c2*conj(c3)
     v = conj(c1)*c2*conj(c3) - s1*conj(s3)
@@ -213,7 +161,12 @@ function _turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T})
     a = c4*conj(c5)*v - conj(s4)*conj(c5)*w + s5*u
     b = conj(c4)*w + s4*v
 
-    c6, s6, tmp = givensrot(a,b)	
+    c6, s6, beta = givensrot(a,b)
+
+    beta = beta/norm(beta)
+    c6 *= conj(beta) # make diagonal elements 1
+    s6 *= beta
+    
     (c4, s4, c5, s5, c6, s6)
 end
 

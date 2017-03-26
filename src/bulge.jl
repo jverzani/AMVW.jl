@@ -1,4 +1,5 @@
 ## Bulge chasing
+## RealDoubleShift
 ##
 ## There are two rotators, U, V, to chase through the matrix using the following operations
 ##                                   [         [
@@ -20,6 +21,7 @@
 function create_bulge{T}(state::RealDoubleShift{T})
 
     if mod(state.ctrs.it_count, 15) == 0
+        
         t = rand() * pi
         re1, ie1 = cos(t), sin(t)
         re2, ie2 = re1, -ie1
@@ -75,15 +77,11 @@ function create_bulge{T}(state::RealDoubleShift{T})
         c2 = -l1r * bk21 - l2r * bk21 + bk11* bk21 + bk21 * bk22
         c3 = bk21 * bk32
 
-
-        # c1 = -l1i * l2i + l1r*l2r -l1r*Bk[1,1] -l2r * Bk[1,1] + Bk[1,1]^2 + Bk[1,2] * Bk[2,1]
-        # c2 = -l1r * Bk[2,1] - l2r * Bk[2,1] + Bk[1,1]* Bk[2,1] + Bk[2,1] * Bk[2,2]
-        # c3 = Bk[2,1] * Bk[3,2]
         
         c, s, nrm = givensrot(c2, c3)
         j = state.ctrs.start_index + 1
 
-       vals!(state.V, c, -s)
+        vals!(state.V, c, -s)
         idx!(state.V, j)
 
         c, s, tmp = givensrot(c1, nrm)
@@ -112,7 +110,6 @@ end
 #  R             (r, pr2)
 function prepare_bulge{T}(state::RealDoubleShift{T})
     
-    # println("prepare bulge")
     # N = state.N
     # as_full(state.V', N+1)* as_full(state.U', N+1)* full(state) * as_full(state.U, N+1) * as_full(state.V, N+1) |> eigvals |> println
 
@@ -122,8 +119,6 @@ function prepare_bulge{T}(state::RealDoubleShift{T})
     vals!(state.Ut, state.U.c, -state.U.s); idx!(state.Ut, idx(state.U))
     vals!(state.Vt, state.V.c, -state.V.s); idx!(state.Vt, idx(state.V))
 
-#    Ut, Vt = state.U'; Vt = state.V'
-    
     copy!(state.W, state.Q[k])
     p = k == 1 ? one(T) : state.Q[k-1].c  #  zero index implies Q0 = RR(1,0) or RR(-1,0)
     dflip(state.W, p)
@@ -151,8 +146,6 @@ function one_bulge_chase_shortcut{T}(state::RealDoubleShift{T})
         a,b = vals(state.B[i+k])
         vals!(state.Ct[i+k], a, -b) # using copy!(Ct, B') is slower
     end
-#    idx!(state.U, i-1)
-#    idx!(state.V, i)
 
     turnover(state.Q[i],    state.Q[i+1], state.V, Val{:right})
     turnover(state.Q[i-1],  state.Q[i],   state.U, Val{:right})
@@ -254,17 +247,20 @@ end
 
 ##################################################
 
-## ComplexSingleShift is easier
+## ComplexSingleShift 
 function create_bulge{T}(state::ComplexSingleShift{T})
 
     if mod(state.ctrs.it_count, 15) == 0
+        
         t = rand() * pi
         if state.ray
             shift = complex(cos(t), sin(t))
         else
             shift = complex(cos(t), zero(T))
         end
+        
     else
+        
         flag = diagonal_block(state, state.ctrs.stop_index+1)
         if state.ray
             e1, e2 = eigen_values(state)
@@ -272,53 +268,34 @@ function create_bulge{T}(state::ComplexSingleShift{T})
         else
             shift = state.A[2,2]
         end
+        
     end
 
     flag = diagonal_block(state, state.ctrs.start_index+1)
     c,s,nrm = givensrot(state.A[1,1] - shift, state.A[2,1])
-    vals!(state.U, c, s)
+
+    vals!(state.U, conj(c), -s) # U is the inverse of what we just found, 
     idx!(state.U, state.ctrs.start_index)
-
-
-    println("Bulge")
-    println(state.U)
+    vals!(state.Ut, c, s)
+    idx!(state.Ut, idx(state.U))
+    nothing
 end
         
   
 
 ##
 ##    D        D           D
-## U'    Q -->   D V Q -->   D D' (VQ) Then move D=R(alpha,0), D'=R(phi,0) over
+## U'    Q -->   V Q -->     (VQ) 
 ##
 ## with D = D(alpha); U' = (u1, v1); V = (u1 conj(alpha), v1)
-#    D       D             D                     D
-# U'   Q ->    D U' Q -> D   D' (fU'Q) -> (D D')   (fU'Q) then move (D D') unitarilay
 function prepare_bulge{T}(state::ComplexSingleShift{T})
-    Ut = copy(state.U)
-    i = idx(Ut)
-    if i == 1 # move through identify
-        phi = fuse(Ut, state.Q[i], Val{:right})
-        # pass through right-hand U:
-        passthrough([phi, conj(phi)], state.U)
-        # D * Di -> D
-        state.D[i] *= phi
-        state.D[i+1] *= conj(phi)
-    else
-        alpha = vals(state.Q[i-1])[1] # Q is a "D" matrix
-        # switching U' and D -> V = (u1*conj(alpha), v1)
-        u1, v1 = vals(Ut)
-        vals!(Ut, u1 * conj(alpha), v1)
-
-        # pass through right-hand U:
-        passthrough([one(T), alpha], state.U)
-        state.D[i-1] *= alpha        # unitary transform of Dalpha
-        state.D[i] *= conj(alpha)
-
-        phi = fuse(Ut, state.Q[i], Val{:right})
-        passthrough([phi, conj(phi)], state.U)        
-        state.D[i] *= phi
-        state.D[i+1] *= conj(phi)
+    i = idx(state.Ut)
+    if i > 1
+        # if previously deflated, the prior is only diagonal
+        # so may have trouble passing Ut to Q[i]
+        Dflip(state.Ut, state.Q[i-1])
     end
+    fuse(state.Ut, state.Q[i], Val{:right})
 end       
 
 ##
@@ -327,9 +304,9 @@ function one_bulge_chase_shortcut{T}(state::ComplexSingleShift{T})
     ## savings are one fewer turnover, a few copies
     one_bulge_chase(state)
 end
+# Moving QCBU_i -> QC(BUi) -> QCUi1B -> Q(CUi1)B -> QUiCB -> Ui1 Q C B
 function one_bulge_chase{T}(state::ComplexSingleShift{T})
     i = idx(state.U)
-    passthrough(view(state.D, i:i+1), state.U)
     turnover(state.B[i],    state.B[i+1], state.U, Val{:right})
     turnover(state.Ct[i+1], state.Ct[i],  state.U, Val{:right})
     turnover(state.Q[i],    state.Q[i+1], state.U, Val{:right})    
@@ -339,9 +316,6 @@ end
 # (Q U) Ct B D -> U Q Ct B D  then wrap via unitary operation
 function chase_bulge{T}(state::ComplexSingleShift{T})
 
-    # println("  begin chase at level $(state.V.i)")
-    # as_full(state.W, state.N+1)* full(state) * as_full(state.V, state.N+1) * as_full(state.U, state.N+1) |> eigvals |> println
-    
     # one step
     i = idx(state.U)
 
@@ -362,21 +336,15 @@ end
 
 # We have Q Ct B D U -> Q Ct B (U D) -> Q Ct (B U) D -> Q (Ct U) B D ->
 # (Q U) Ct B D -> Q Di Ct B D -> Q (Di Ct) B D -> Q Ct (Di B) D -> Q Ct B (Di D)
+# Q CB(Ui) -> QUi C B -> (QUi
+#  I
 function absorb_bulge{T}(state::ComplexSingleShift{T})
     i = idx(state.U)
 
-    passthrough(view(state.D, i:i+1), state.U)
     turnover(state.B[i],    state.B[i+1], state.U, Val{:right})
     turnover(state.Ct[i+1], state.Ct[i],  state.U, Val{:right})
-    phi = fuse(state.Q[i], state.U, Val{:left})
-
-    ##  We now have Qi * Di. Move Di to right to merge with state.D
-    Di = ComplexRotator(real(phi), imag(phi), zero(T), i)
-    turnover(Di, state.Ct[i+1], state.Ct[i], Val{:left})
-    turnover(Di, state.B[i], state.B[i+1], Val{:left})
-    phi, tmp = vals(Di)
-    state.D[i] *= phi
-    state.D[i+1] *= conj(phi)
+    i < state.N && Dflip(state.U, state.Q[i+1])
+    fuse(state.Q[i], state.U, Val{:left})
 end
 
 

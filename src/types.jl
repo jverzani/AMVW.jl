@@ -93,46 +93,47 @@ function Base.convert{T}(::Type{RealDoubleShift}, ps::Vector{T})
                     one(RealRotator{T}), one(RealRotator{T}),
                     one(RealRotator{T}), one(RealRotator{T}),
                     one(RealRotator{T}), #U,U',V,V',W
-                    zeros(T, 3, 2),zeros(T, 3, 2),zeros(T, 3, 2), # A Bk R
+                    zeros(T, 2, 2),zeros(T, 3, 2),zeros(T, 3, 2), # A Bk R
                     zeros(T,2), zeros(T,2),
                     DoubleShiftCounter(0,1,N-1, 0, N-2)
     )
 end
 
+##################################################
+## We use two complex, rather than 3 reals here.
+## Same storage, as we don't need to include a D
     
 mutable struct ComplexRotator{T} <: Rotator{T}
-cr::T
-ci::T
-s::T
+c::Complex{T}
+s::Complex{T}
 i::Int
 end
 
 function Base.ctranspose(r::ComplexRotator)
-    ComplexRotator(r.cr, -r.ci, -r.s, r.i)
+    ComplexRotator(conj(r.c), -r.s, r.i)
 end
 
 
-Base.one{T}(::Type{ComplexRotator{T}}) = ComplexRotator(one(T), zero(T), zero(T), 0)
+Base.one{T}(::Type{ComplexRotator{T}}) = ComplexRotator(complex(one(T), zero(T)), complex(zero(T), zero(T)), 0)
 Base.ones{T}(S::Type{ComplexRotator{T}}, N) = [one(S) for i in 1:N]
 
 ## get/set values
-vals{T}(r::ComplexRotator{T}) = (complex(r.cr, r.ci), r.s)
-function vals!{T}(r::ComplexRotator, cr::T, ci::T, s::T)
+vals{T}(r::ComplexRotator{T}) = (r.c, r.s)
+function vals!{T}(r::ComplexRotator, c::Complex{T}, s::Complex{T})
     # normalize in case of roundoff errors
     # but, using hueristic on 6.3 on square roots
     
-    nrmi = cr^2 + ci^2 + s^2 
-    nrmi = norm(nrmi - one(T)) >= 1e2*eps(T) ? inv(sqrt(nrmi)) : one(T)
-    r.cr = cr * nrmi
-    r.ci = ci * nrmi    
+    nrmi = sqrt(abs(c * conj(c) + s * conj(s)))
+    nrmi = norm(nrmi - one(T)) >= eps(T) ? inv(sqrt(nrmi)) : one(T)
+    r.c = c * nrmi
     r.s = s * nrmi
 end
-vals!{T}(r::ComplexRotator, c::Complex{T}, s::T) = vals!(r, real(c), imag(c), s)
-vals!{T}(r::ComplexRotator{T}, c::T, s::T) = vals!(r, real(c), zero(T), s)
+vals!{T}(r::ComplexRotator, c::Complex{T}, s::T) = vals!(r, c, complex(s,zero(T)))
+vals!{T}(r::ComplexRotator{T}, c::T, s::T) = vals!(r, complex(c, zero(T)), complex(s, zero(T)))
 idx(r::ComplexRotator) = r.i
 idx!(r::ComplexRotator, i::Int) = r.i = i
 
-Base.copy(a::ComplexRotator) = ComplexRotator(a.cr, a.ci, a.s, a.i)
+Base.copy(a::ComplexRotator) = ComplexRotator(a.c, a.s, a.i)
 function Base.copy!(a::ComplexRotator, b::ComplexRotator)
     vals!(a, vals(b)...)
     idx!(a, idx(b))
@@ -156,12 +157,12 @@ struct ComplexSingleShift{T} <: ShiftType{T}
     POLY::Vector{Complex{T}}
     Q::Vector{ComplexRotator{T}}
     Ct::Vector{ComplexRotator{T}}  # We use C', not C here
-B::Vector{ComplexRotator{T}}
-D::Vector{Complex{T}}
+    B::Vector{ComplexRotator{T}}  
     REIGS::Vector{T}
     IEIGS::Vector{T}
     ## reusable storage
 U::ComplexRotator{T}
+Ut::ComplexRotator{T}
     A::Matrix{Complex{T}}    # for parts of A = QR
     Bk::Matrix{Complex{T}}   # for diagonal block
     R::Matrix{Complex{T}}    # temp storage, sometimes R part of QR
@@ -175,17 +176,16 @@ function Base.convert{T}(::Type{ComplexSingleShift}, ps::Vector{Complex{T}})
     N = length(ps)
     
     ComplexSingleShift(N, ps,
-                    ones(ComplexRotator{T}, N), #Q
-                    ones(ComplexRotator{T}, N), #Ct
+                       ones(ComplexRotator{T}, N), #Q
+                       ones(ComplexRotator{T}, N), #Ct
                        ones(ComplexRotator{T}, N), #B
-                       ones(Complex{T},N+1),    #D
-                    zeros(T, N),  zeros(T, N), #EIGS
-                    one(ComplexRotator{T}), #U
+                       zeros(T, N),  zeros(T, N), #EIGS
+                       one(ComplexRotator{T}), one(ComplexRotator{T}), #U, Ut
                        zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
                        zeros(Complex{T}, 3, 2), # A Bk R
-                       zeros(T,2), zeros(T,2),
+    zeros(T,2), zeros(T,2),
     true,  # true for Wilkinson, 1 for Rayleigh
-                    SingleShiftCounter(0,1,N-1, 0, N-2)
+    SingleShiftCounter(0,1,N-1, 0, N-2)
     )
 end
 

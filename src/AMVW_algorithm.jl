@@ -1,7 +1,7 @@
 
 ## Main algorithm of AMV&W
 ## This follows that given in the paper very closely
-function AMVW_algorithm{T}(state::RealDoubleShift{T})
+function AMVW_algorithm{T}(state::ShiftType{T})
 
 
     it_max = 30 * state.N
@@ -15,14 +15,16 @@ function AMVW_algorithm{T}(state::RealDoubleShift{T})
         check_deflation(state)
         kk += 1
 
-        #        show_status(state)
+#        show_status(state)
 
         k = state.ctrs.stop_index
 
         if state.ctrs.stop_index - state.ctrs.zero_index >= 2
+            
             bulge_step(state)
             state.ctrs.it_count += 1
             state.ctrs.tr -= 2
+            
         elseif state.ctrs.stop_index - state.ctrs.zero_index == 1
 
             diagonal_block(state,  k + 1)
@@ -31,11 +33,18 @@ function AMVW_algorithm{T}(state::RealDoubleShift{T})
             state.REIGS[k], state.IEIGS[k] = state.e2
             state.REIGS[k+1], state.IEIGS[k+1] = state.e1
 
+            if k > 1
+                diagonal_block(state,  k)
+                eigen_values(state)
+            end
+            
             diagonal_block(state, 2)
             
             if state.ctrs.stop_index == 2
                 diagonal_block(state, 2)
-                state.REIGS[1] = state.A[1,1]
+                e1 = state.A[1,1]
+                state.REIGS[1] = real(e1)
+                state.IEIGS[1] = imag(e1)
             end
             state.ctrs.zero_index = 0
             state.ctrs.start_index = 1
@@ -44,17 +53,15 @@ function AMVW_algorithm{T}(state::RealDoubleShift{T})
         elseif state.ctrs.stop_index - state.ctrs.zero_index == 0
 
             diagonal_block(state, state.ctrs.stop_index + 1)
-            
-            e1, e2 = state.A[1,1], state.A[2,2] # eigvals(Bk[1:2, 1:2])
-
-            
+            e1, e2 = state.A[1,1], state.A[2,2] 
+                        
             if state.ctrs.stop_index == 1
-                state.REIGS[state.ctrs.stop_index] = e1
-                state.REIGS[state.ctrs.stop_index+1] = e2
+                state.REIGS[1], state.IEIGS[1] = real(e1), imag(e1)
+                state.REIGS[2], state.IEIGS[2] = real(e2), imag(e2)
                 state.ctrs.stop_index = 0
             else
-                state.REIGS[state.ctrs.stop_index+1] = e2
                 k = state.ctrs.stop_index
+                state.REIGS[k+1], state.IEIGS[k+1] = real(e2), imag(e2)
                 state.ctrs.zero_index = 0
                 state.ctrs.start_index = 1
                 state.ctrs.stop_index = k - 1
@@ -75,6 +82,12 @@ function amvw{T <: Real}(qs::Vector{T})
     state
 end
 
+function amvw{T <: Real}(qs::Vector{Complex{T}})
+    state = ComplexSingleShift(qs)
+    init_state(state)
+    AMVW_algorithm(state)
+    state
+end
 
 """
 Use AMVW algorithm doubleshift alorithm to find roots
@@ -117,5 +130,5 @@ function poly_roots{T}(ps::AbstractVector{T})
         bs = vcat(state.IEIGS, zeros(k))
         rts = complex.(as, bs) 
     end
-    return rts
+    return rts, state
 end
