@@ -4,7 +4,7 @@
 function AMVW_algorithm{T}(state::ShiftType{T})
 
 
-    it_max = 30 * state.N
+    it_max = 60 * state.N
     kk = 0
 
     while kk <= it_max
@@ -30,6 +30,7 @@ function AMVW_algorithm{T}(state::ShiftType{T})
             diagonal_block(state,  k + 1)
             eigen_values(state)
 
+            
             state.REIGS[k], state.IEIGS[k] = state.e2
             state.REIGS[k+1], state.IEIGS[k+1] = state.e1
 
@@ -60,7 +61,6 @@ function AMVW_algorithm{T}(state::ShiftType{T})
                 state.REIGS[2], state.IEIGS[2] = real(e2), imag(e2)
                 state.ctrs.stop_index = 0
             else
-                k = state.ctrs.stop_index
                 state.REIGS[k+1], state.IEIGS[k+1] = real(e2), imag(e2)
                 state.ctrs.zero_index = 0
                 state.ctrs.start_index = 1
@@ -83,7 +83,8 @@ function amvw{T <: Real}(qs::Vector{T})
 end
 
 function amvw{T <: Real}(qs::Vector{Complex{T}})
-    state = ComplexSingleShift(qs)
+    #    state = ComplexSingleShift(qs)
+    state = ComplexRealSingleShift(qs)
     init_state(state)
     AMVW_algorithm(state)
     state
@@ -119,8 +120,12 @@ function poly_roots{T}(ps::AbstractVector{T})
         bs = vcat([-imag(qs[1])], zeros(k))
         rts = complex.(as, bs)
     elseif n == 2
-        b,c = -(0.5)*qs[1], qs[2]
-        e1r, e1i, e2r, e2i = qdrtc(one(T), b, c)
+        if T <: Real
+            b,c = -(0.5)*qs[1], qs[2]
+            e1r, e1i, e2r, e2i = qdrtc(one(T), b, c)
+        else
+            e1r, e1i, e2r, e2i = quadratic_equation(one(T), qs[1], qs[2])
+        end
         as = vcat([e1r, e2r], zeros(k))
         bs = vcat([e1i, e2i], zeros(k))
         rts = complex.(as, bs)
@@ -130,5 +135,5 @@ function poly_roots{T}(ps::AbstractVector{T})
         bs = vcat(state.IEIGS, zeros(k))
         rts = complex.(as, bs) 
     end
-    return rts, state
+    return rts
 end

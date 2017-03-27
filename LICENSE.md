@@ -1,6 +1,9 @@
-The AMVW.jl package is licensed under the MIT "Expat" License:
 
-> Copyright (c) 2017: jverzani.
+This is not the proper license, though it would be nice
+
+## The AMVW.jl package is licensed under the MIT "Expat" License:
+
+> Copyright (c) 2017: XXX
 > 
 > Permission is hereby granted, free of charge, to any person obtaining a copy
 > of this software and associated documentation files (the "Software"), to deal

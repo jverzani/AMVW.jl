@@ -17,15 +17,23 @@ function reverse_poly{T}(ps::Vector{T})
 end
 
 #
-function quadratic_equation{T}(a::T, b::T, c::T)   
+function quadratic_equation{T <: Real}(a::T, b::T, c::T)   
     qdrtc(a, -(0.5)*b, c)
+end
+
+## make more robust
+function quadratic_equation{T}(a::Complex{T}, b::Complex{T}, c::Complex{T})
+    d = sqrt(b^2 - 4*a*c)
+    e1 = (-b + d)/(2a); e2 = (-b-d)/(2a)
+    return (real(e1), imag(e1), real(e2), imag(e2))
+    
 end
 
 ## Kahan quadratic equation with fma
 ##  https://people.eecs.berkeley.edu/~wkahan/Qdrtcs.pdf
 
 ## solve ax^2 - 2bx + c
-function qdrtc{T}(a::T, b::T, c::T)
+function qdrtc{T <: Real}(a::T, b::T, c::T)
     # z1, z2 roots of ax^2 - 2bx + c
     d = discr(a,b,c)  # (b^2 - a*c), as 2 removes 4
     

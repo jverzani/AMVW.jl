@@ -67,8 +67,7 @@ end
 #
 # D    -->    D
 #   U      U 
-is_diagonal{T}(r::ComplexRotator{T}) = norm(r.s) <= eps(T)
-is_identity{T}(r::ComplexRotator{T}) = r.c == one(Complex{T})
+
 
 
 # (After absorbtion we leave an I for Q, not "D" matrix as in real case)
@@ -83,8 +82,7 @@ is_identity{T}(r::ComplexRotator{T}) = r.c == one(Complex{T})
    D  --> D
 U           V
 """
-function Dflip{T}(r::ComplexRotator{T}, d::ComplexRotator{T})
-    is_identity(r) && error("check first for this case")
+function Dflip{T}(r::ComplexComplexRotator{T}, d::ComplexComplexRotator{T})
     !is_diagonal(d) && error("d must be diagonal rotator")
 
     # D is fixed,
@@ -92,14 +90,59 @@ function Dflip{T}(r::ComplexRotator{T}, d::ComplexRotator{T})
     r.s = r.s * conj(alpha)
 end
 
+##   U --> U Da
+## D           Da
+## (not the reverse!)
+function Dflip{T}(d::ComplexRealRotator{T}, r::ComplexRealRotator{T})
+#    !is_diagonal(d) && error("d must be diagonal rotator")
 
+    alpha = d.c
+    c,s = vals(r)
+    vals!(r, c*conj(alpha), s)
+end
 
+## Fuse
 ## fuse combines two rotations, a and b, into one,
-## XXX If using complex rotators with real sine part, need a diagonal matrix
-## coming out of this
 
-# Had switch forVal{:left} updates a, Val{:right} updates b; but this is faster
-## 
+
+## For ComplexRealRotator, the result of a*b will not have a real sign, so
+## a diagonal matrix is needed. This is passed in via the 4th argument
+##
+## for left with have uv -> (u') Di
+function fuse{T}(a::ComplexRealRotator{T}, b::ComplexRealRotator{T},::Type{Val{:left}}, Di::ComplexRealRotator{T})
+    #    idx(a) == idx(b) || error("can't fuse")
+    u = a.c * b.c - conj(a.s) * b.s
+    v = conj(a.c) * b.s + a.s * b.c
+
+    alpha =  conj(v)/norm(v)
+
+    a.c = u * alpha
+    a.s = norm(v)
+    vals!(Di, conj(alpha), zero(T))
+    idx!(Di, idx(a))
+end
+
+# for right we have uv -> Di (v')
+function fuse{T}(a::ComplexRealRotator{T}, b::ComplexRealRotator{T}, ::Type{Val{:right}}, Di::ComplexRealRotator{T})
+#    idx(a) == idx(b) || error("can't fuse")
+    u = a.c * b.c - conj(a.s) * b.s
+    v = conj(a.c) * b.s + a.s * b.c
+
+    
+    alpha =  v/norm(v)
+
+    b.c = u * alpha
+    b.s = norm(v)
+    vals!(Di, conj(alpha), zero(T))
+    idx!(Di, idx(a))
+    
+end
+
+
+## Fuse for genera rotation
+## We have two functions as it seems a bit faster
+fuse{T}(a::Rotator{T}, b::Rotator{T}, dir, d) = fuse(a,b,dir)
+
 function fuse{T}(a::Rotator{T}, b::Rotator{T},::Type{Val{:left}})
     #    idx(a) == idx(b) || error("can't fuse")
     u = a.c * b.c - conj(a.s) * b.s
@@ -121,9 +164,10 @@ end
 # misfit is Val{:right} for <-- (right to left turnover), Val{:left} for -->
 #
 # This is the key computation once matrices are written as rotators
-## XXX we wrote this for complex rotators where sine part may be complex
-# can trim down a bit if not the case, as we don't need to fuss with alpha, beta below
-##function _turnover{T}(Q1::ComplexRotator{T}, Q2::ComplexRotator{T}, Q3::ComplexRotator{T})
+# We wrote this for complex rotators where sine part may be complex
+# so we make use of alpha and beta, which isn't otherwise needed
+# could streamline, but doesn't seem to incur an expense
+
 function _turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T})    
 #    i,j,k = idx(Q1), idx(Q2), idx(Q3)
 #    (i == k) || error("Need to have a turnover up down up or down up down: have i=$#i, j=$j, k=$k")
@@ -198,3 +242,18 @@ end
 
 
 
+
+
+## passthrough
+## Pass a rotator through a diagonal matrix with phase shifts
+## D U -> U' D'
+function passthrough{T}(D, U::ComplexRealRotator{T})
+    i = idx(U)
+    alpha, beta = D[i], D[i+1]
+
+    c, s = vals(U)
+    u = c * alpha * conj(beta)
+    v = s
+    vals!(U, u, v)
+    D[i], D[i+1] = beta, alpha
+end

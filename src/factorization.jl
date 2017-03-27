@@ -1,9 +1,70 @@
 ## 
 ## initial factorization
+## Could consolidate, later
+## (would need ZERO, ONE defn, and incorporate building up of D matrix
+function init_state{T}(state::ComplexRealSingleShift{T})
+
+    N, ps= state.N, state.POLY
+    par = iseven(N) ? one(T) : -one(T)
+    # if isa(state, RealDoubleShift)
+    #     const ZERO, ONE = zero(T), one(T)
+    # else
+    #     const ZERO, ONE = zero(Complex{T}), one(Complex{T})
+    # end
+
+
+    
+    Q, Ct, B = state.Q, state.Ct, state.B
+
+    for ii = 1:(N-1)
+        ##        vals!(Q[ii], ZERO, ONE)
+        vals!(Q[ii], zero(Complex{T}), one(T))
+        idx!(Q[ii], ii)
+    end
+    ##    vals!(Q[N], ONE, ZERO)
+    vals!(Q[N], one(Complex{T}), zero(T))
+    idx!(Q[N], N)
+
+
+    ## Working, but not quite what is in DFCC code
+    ## there -par*ps[N], par*one(T); C is -conj(c), -s
+    ## B[N] = par, -par...
+    ## Here we use: C' * B * D = Z (and not D C' B = Z)
+    c, s, temp = givensrot(par * ps[N], -par * one(T))
+    vals!(Ct[N], conj(c), -s); idx!(Ct[N], N)
+
+    #    vals!(B[N], -par*s, par*conj(c))
+    # B * Dn * Dn'
+    v = conj(c)
+    alpha1 = conj(v)/norm(v)
+    vals!(B[N], -par*s*alpha1, par*norm(c))
+    state.D[N] = conj(alpha1)
+    state.D[N+1] = alpha1
+    
+
+
+    idx!(B[N], N)
+    
+    for ii in 2:N
+        c, s, temp = givensrot(-ps[ii-1], temp)
+        vals!(Ct[N-ii + 1], conj(c), -s)
+        idx!(Ct[N-ii+1], N-ii+1)
+        
+        vals!(B[N-ii + 1], c, s)
+        idx!(B[N-ii+1], N-ii+1)
+    end
+
+end
+
+
+## 
+## initial factorization
 function init_state{T}(state::ShiftType{T})
 
     N, ps= state.N, state.POLY
     par = iseven(N) ? one(T) : -one(T)
+
+    
     if isa(state, RealDoubleShift)
         const ZERO, ONE = zero(T), one(T)
     else
@@ -47,7 +108,7 @@ end
 
 # If there is an issue, this function can be used to resetart the algorithm
 # could be merged with init_state?
-function restart{T}(state::RealDoubleShift{T})
+function restart{T}(state::ShiftType{T})
     # try again
     init_state(state)
     for i in 1:state.N
@@ -59,6 +120,8 @@ function restart{T}(state::RealDoubleShift{T})
     state.ctrs.it_count = 0
     state.ctrs.tr = state.N - 2
 end
+
+
 ### Related to decompostion QR into QC(B + ...)
 
 
@@ -69,35 +132,24 @@ end
 ## updates state.A
 ##
 # We look for r_j,k. Depending on |j-k| there are different amounts of work
-# we have wk = (B + e1 y^t) * ek = B*ek + e1 yk; we consider B * ek only B1 ... Bk ek applies
+# we have wk = (B * D + e1 y^t) * ek = B* D * ek + e1 yk; we consider B*D* ek only B1 ... Bk D ek applies
 #
-# julia> @vars bk1 bk2 bj1 bj2 bi1 bi2
-# julia> rotm(bi1, bi2, 1, 4) * rotm(bj1, bj2, 2, 4) * rotm(bk1, bk2, 3, 4) * [0, 0, 1, 0]  # B_{k-2} * B_{k-1} * B_k * ek = W
-# 4-element Array{SymPy.Sym,1}
-# ⎡bi₂⋅bj₂⋅bk₁ ⎤
-# ⎢            ⎥
-# ⎢         ___⎥
-# ⎢-bj₂⋅bk₁⋅bi₁⎥
-# ⎢            ⎥
-# ⎢      ___   ⎥
-# ⎢  bk₁⋅bj₁   ⎥
-# ⎢            ⎥
-# ⎣    bk₂     ⎦
-# which gives W = [what_{k-2} w_{k-1} w_k w_{k+1}]
 
-## If we decompose as C'*D * B = Z, instead of D*C'*B we get
-# julia> D*Bi*Bj*Bk*[0,0,1,0]
+## If we decompose as C'*B*D = Z, instead of D*C'*B we get
+# julia> Bi*Bj*Bk* D * [0,0,1,0]
+# julia> rotm(bi1, bi2, 1, 4) * rotm(bj1, bj2, 2, 4) * rotm(bk1, bk2, 3, 4) *D * [0,0,1,0]
 # 4-element Array{SymPy.Sym,1}
 # ⎡       ___ ___ ⎤
-# ⎢bk₁⋅di⋅bi₂⋅bj₂ ⎥
+# ⎢bk₁⋅dk⋅bi₂⋅bj₂ ⎥
 # ⎢               ⎥
 # ⎢        ___ ___⎥
-# ⎢-bk₁⋅dj⋅bi₁⋅bj₂⎥
+# ⎢-bk₁⋅dk⋅bi₁⋅bj₂⎥
 # ⎢               ⎥
 # ⎢         ___   ⎥
 # ⎢  bk₁⋅dk⋅bj₁   ⎥
 # ⎢               ⎥
-# ⎣    bk₂⋅dl     ⎦
+# ⎣    bk₂⋅dk     ⎦
+# which gives [what, wj, wk, wl]
 
 # For rkk, we have Ck * W = [rkk, 0]
 # @vars ck1 ck2 what w1
@@ -105,14 +157,8 @@ end
 # u[1](what => solve(u[2], what)[1]) |> simplify
 #     ⎛    ___      2⎞ 
 # -w₁⋅⎝ck₁⋅ck₁ + ck₂ ⎠ 
-# ─────────────────────
+# ───────────────────── this is rkk = -w1/ck_s 
 #          ck₂    
-
-#    ⎛  2     2⎞ 
-# -w₁⋅⎝c₁  + c₂ ⎠ 
-# ────────────────  # this is rkk = -w1/c2 = -bk2/ck2
-#        c₂ 
-
 # 
 # For r[k-1, k] we need to do more work. We need [what_{k-1}, w_k, w_{k+1}], where w_k, w_{k+1} found from B values as above.
 #
@@ -157,6 +203,9 @@ end
 # Ct[k] become trivial. Theorem 4.1 ensures this can't happen mathematically
 # though numerically, this is a different matter. The bound involves 1/||p|| which can be smaller than machine precision for, say, Wilknson(20)
 #
+getD(state::ComplexRealSingleShift, k::Int) = state.D[k]
+getD{T}(state::ShiftType{T}, k::Int) = one(T)
+
 function diagonal_block{T}(state::ShiftType{T}, k)
     k >= 2 && k <= state.N || error("$k not in [2,n]")
 
@@ -178,8 +227,8 @@ function diagonal_block{T}(state::ShiftType{T}, k)
         # k=2 this is r_kk, r_k-1,k
 
         # for k
-        wl = Bk_s
-        wk =  conj(Bj_c) * Bk_c
+        wl =  getD(state, k) * Bk_s
+        wk =  getD(state, k) *  conj(Bj_c) * Bk_c
 
 
         R[2,2] = - wl / Ck_s
@@ -188,7 +237,7 @@ function diagonal_block{T}(state::ShiftType{T}, k)
         R[1,2] = - (wk + Cj_c * conj(Ck_c) / Ck_s * wl) / Cj_s
 
         # for k - 1 we have (l=k)
-        wl = Bj_s
+        wl = getD(state, k-1) * Bj_s
         R[1,1] = - wl / Cj_s
         R[2,1] = complex(zero(T))
 
@@ -214,9 +263,9 @@ function diagonal_block{T}(state::ShiftType{T}, k)
 
         
         # for k
-        wl =  Bk_s
-        wk = conj(Bj_c) * Bk_c
-        wj = -conj(Bi_c) * conj(Bj_s) * Bk_c
+        wl =  getD(state, k) *  Bk_s
+        wk =  getD(state, k) * conj(Bj_c) * Bk_c
+        wj = - getD(state, k) * conj(Bi_c) * conj(Bj_s) * Bk_c
         
         R[3,2] = - wl / Ck_s
         R[2,2] = - (wk + Cj_c * conj(Ck_c) / Ck_s * wl) / Cj_s
@@ -225,8 +274,8 @@ function diagonal_block{T}(state::ShiftType{T}, k)
                    Ci_c * conj(Ck_c) / (Cj_s * Ck_s) * wl) / Ci_s
 
         # downshift C indexes l->k; k->j; j->i; but keep w's (confusing)
-        wl =  Bj_s
-        wk =  conj(Bi_c) * Bj_c
+        wl = getD(state, k-1) * Bj_s
+        wk = getD(state, k-1) * conj(Bi_c) * Bj_c
         R[2,1] = - wl / Cj_s
         R[1,1] = - (wk + Ci_c * conj(Cj_c) / Cj_s * wl) / Ci_s
         R[3,1] = zero(T)
@@ -260,6 +309,7 @@ function diagonal_block{T}(state::ShiftType{T}, k)
     false 
 end
 
+##################################################
 
 # [a11 - l a12; a21 a22] -> l^2 -2 * (tr(A)/2) l + det(A)
 # so we use b = tr(A)/2 for qdrtc routing
@@ -275,7 +325,7 @@ function eigen_values{T}(state::RealDoubleShift{T})
 end    
 
 # from `modified_quadratic.f90`
-function eigen_values{T}(state::ComplexSingleShift{T})
+function eigen_values{T}(state::ShiftType{T})
 
     a11, a12 = state.A[1,1], state.A[1,2]
     a21, a22 = state.A[2,1], state.A[2,2]
@@ -299,6 +349,7 @@ function eigen_values{T}(state::ComplexSingleShift{T})
 end    
 
 
+##################################################
 ## Deflation
 ## when a Q[k] matrix become a "D" matrix, we deflate. This is checked by the sine term being basically 0.
 function check_deflation{T}(state::ShiftType{T}, tol = eps(T))
@@ -314,7 +365,7 @@ end
 # turn on `show_status` to view sequence
 function deflate{T}(state::ShiftType{T}, k)
 
-    # make a P matrix
+    # make a D matrix
     c,s = vals(state.Q[k])
     vals!(state.Q[k], c, zero(T)) # zero out s, will renormalize c
 
@@ -325,6 +376,39 @@ function deflate{T}(state::ShiftType{T}, k)
     # reset counter
     state.ctrs.it_count = 1
 end
+
+
+# deflate a term
+# turn on `show_status` to view sequence
+function deflate{T}(state::ComplexRealSingleShift{T}, k)
+
+    # when we deflate here we want to leave Q[k] = I and
+    # move Dk matrix over to merge with D
+    # we do this by m
+    # Qi           Qi              Dk Qi
+    #   Qj     ->     Dk Qj    -->    Dk  Qj  and so on until we get to start_index
+    #     Dk Ik         Dk  Ik           Dk Ik
+    #
+    # then the Dk's are collected into [alpa 0; I; 0 conj(alpha)] (start,k+1)
+    copy!(state.Di, state.Q[k])
+    alpha, s = vals(state.Di)
+    vals!(state.Q[k], one(Complex{T}), zero(T)) # I
+    for j in k:-1:(state.ctrs.start_index+1)
+        i = idx(state.Di)
+        Dflip(state.Di, state.Q[i-1])
+        idx!(state.Di, i-1)
+    end
+    state.D[state.ctrs.start_index] *= alpha
+    state.D[k+1] *= conj(alpha)
+    
+    # shift zero counter
+    state.ctrs.zero_index = k      # points to a matrix Q[k] either RealRotator(-1, 0) or RealRotator(1, 0)
+    state.ctrs.start_index = k + 1
+
+    # reset counter
+    state.ctrs.it_count = 1
+end
+
 
 ##################################################
 
