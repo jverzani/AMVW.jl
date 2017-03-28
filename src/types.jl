@@ -185,7 +185,7 @@ end
 #######################################################
 ## State for ComplexReal type
 
-struct ComplexRealSingleShift{T} <: ShiftType{T} 
+mutable struct ComplexRealSingleShift{T} <: ShiftType{T} 
     N::Int
     POLY::Vector{Complex{T}}
     Q::Vector{ComplexRealRotator{T}}
@@ -221,7 +221,7 @@ function Base.convert{T}(::Type{ComplexRealSingleShift}, ps::Vector{Complex{T}})
                        zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
                        zeros(Complex{T}, 3, 2), # A Bk R
     zeros(T,2), zeros(T,2),
-    #    true,  # true for Wilkinson, 1 for Rayleigh
+    #    true,  # true for Wilkinson, false for Rayleigh
     false,
     AMVW_Counter(0,1,N-1, 0, N-2)
     )

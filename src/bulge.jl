@@ -90,7 +90,7 @@ function create_bulge{T}(state::RealDoubleShift{T})
         idx!(state.U, j-1)
     end
 
-    println("Bulge is $(vals(state.U))")
+#    println("Bulge is $(vals(state.U))")
 end
 
 ## make W on left side
@@ -367,7 +367,7 @@ function create_bulge{T}(state::ComplexRealSingleShift{T})
         flag = diagonal_block(state, state.ctrs.stop_index+1)
 #        println("A=$(state.A)")
         if state.ray
-            e1, e2 = eigen_values(state)
+            e1, e2 = eigen_values(state)            
             shift = norm(state.A[2,2] - e1) < norm(state.A[2,2] - e2) ? e1 : e2
         else
             shift = state.A[2,2]

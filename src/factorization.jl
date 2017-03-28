@@ -15,7 +15,8 @@ function init_state{T}(state::ComplexRealSingleShift{T})
 
     
     Q, Ct, B = state.Q, state.Ct, state.B
-
+    state.D[:] = ones(Complex{T}, N+1)
+    
     for ii = 1:(N-1)
         ##        vals!(Q[ii], ZERO, ONE)
         vals!(Q[ii], zero(Complex{T}), one(T))
@@ -322,6 +323,7 @@ function eigen_values{T}(state::RealDoubleShift{T})
     c = a11 * a22 - a12 * a21
     
     state.e1[1], state.e1[2], state.e2[1], state.e2[2] = qdrtc(one(T), b, c)
+    complex(state.e1[1], state.e1[2]), complex(state.e2[1], state.e2[2])            
 end    
 
 # from `modified_quadratic.f90`
@@ -345,7 +347,7 @@ function eigen_values{T}(state::ShiftType{T})
         state.e2[1], state.e2[2] = real(e2), imag(e2)
     end
 
-    
+    complex(state.e1[1], state.e1[2]), complex(state.e2[1], state.e2[2])                
 end    
 
 
