@@ -90,6 +90,7 @@ function create_bulge{T}(state::RealDoubleShift{T})
         idx!(state.U, j-1)
     end
 
+    println("Bulge is $(vals(state.U))")
 end
 
 ## make W on left side
@@ -364,6 +365,7 @@ function create_bulge{T}(state::ComplexRealSingleShift{T})
     else
         
         flag = diagonal_block(state, state.ctrs.stop_index+1)
+#        println("A=$(state.A)")
         if state.ray
             e1, e2 = eigen_values(state)
             shift = norm(state.A[2,2] - e1) < norm(state.A[2,2] - e2) ? e1 : e2
@@ -375,9 +377,12 @@ function create_bulge{T}(state::ComplexRealSingleShift{T})
 
     flag = diagonal_block(state, state.ctrs.start_index+1)
     c,s,nrm = givensrot(state.A[1,1] - shift, state.A[2,1])
+    
+    vals!(state.U, conj(c), -s) # U is the inverse of what we just found,
+        idx!(state.U, state.ctrs.start_index)
 
-    vals!(state.U, conj(c), -s) # U is the inverse of what we just found, 
-    idx!(state.U, state.ctrs.start_index)
+#    println("Bulge is $c $s")
+    
     vals!(state.Ut, c, s)
     idx!(state.Ut, idx(state.U))
     nothing
@@ -490,5 +495,7 @@ function bulge_step{T}(state::ShiftType{T})
     prepare_bulge(state)
     chase_bulge(state)
     absorb_bulge(state)
+
+#    println(eigvals(full(state)))
 end
 

@@ -161,8 +161,23 @@ p = poly(rs)
 #   time tolerance:   5.00%
 #   memory tolerance: 1.00%
 
-@benchmark AMVW.poly_roots(p.a)
-## Lots of issues here -- work on this!
+@benchmark AMVW.poly_roots(p.a) # need to use state.ray=false
+## XXX Stil misses alot
+# BenchmarkTools.Trial: 
+#   memory estimate:  10.56 KiB
+#   allocs estimate:  230
+#   --------------
+#   minimum time:     361.416 μs (0.00% GC)
+#   median time:      404.793 μs (0.00% GC)
+#   mean time:        453.384 μs (0.50% GC)
+#   maximum time:     5.241 ms (90.24% GC)
+#   --------------
+#   samples:          10000
+#   evals/sample:     1
+#   time tolerance:   5.00%
+#   memory tolerance: 1.00%
+
+
 
 function poly_roots_cc(ps)
     qs, k = AMVW.reverse_poly(ps)

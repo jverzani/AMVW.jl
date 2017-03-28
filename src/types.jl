@@ -85,7 +85,7 @@ function vals!{T}(r::ComplexRealRotator, c::Complex{T}, s::T)
     r.s = s * nrmi
 end
 function vals!{T}(r::ComplexRealRotator, c::Complex{T}, s::Complex{T})
-    abs(imag(s)) < 4eps(T) || error("setting vals needs real s")
+##    abs(imag(s)) < 4eps(T) || error("setting vals needs real s, got $s")
     vals!(r, c, real(s))
 end
 vals!{T}(r::ComplexRealRotator{T}, c::T, s::T) = vals!(r, complex(c, zero(T)), s)
@@ -221,7 +221,8 @@ function Base.convert{T}(::Type{ComplexRealSingleShift}, ps::Vector{Complex{T}})
                        zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
                        zeros(Complex{T}, 3, 2), # A Bk R
     zeros(T,2), zeros(T,2),
-    true,  # true for Wilkinson, 1 for Rayleigh
+    #    true,  # true for Wilkinson, 1 for Rayleigh
+    false,
     AMVW_Counter(0,1,N-1, 0, N-2)
     )
 end

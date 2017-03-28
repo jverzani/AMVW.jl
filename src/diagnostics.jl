@@ -79,11 +79,15 @@ end
 
 # simple graphic to show march of algorithm
 function show_status{T}(state::ShiftType{T})
+    qs = [norm(u.s) for u in state.Q[state.ctrs.start_index:state.ctrs.stop_index]]
+    minq = length(qs) > 0 ?  minimum(qs) : 0.0
+
+    
     x = fill(".", state.N+2)
     x[state.ctrs.zero_index+1] = "α"
     x[state.ctrs.start_index+1] = "x"
     x[state.ctrs.stop_index+2] = "Δ"
-    println(join(x, ""))
+    println(join(x, ""), " ($minq)")
 end
 
 ## create a rotation matrix
