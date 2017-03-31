@@ -262,7 +262,7 @@ function Base.convert{T}(::Type{ComplexComplexSingleShift}, ps::Vector{Complex{T
                        zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
                        zeros(Complex{T}, 3, 2), # A Bk R
     zeros(T,2), zeros(T,2),
-    true,  # true for Wilkinson, 1 for Rayleigh
+    false,  # true for Wilkinson, false for Rayleigh
     AMVW_Counter(0,1,N-1, 0, N-2)
     )
 end
