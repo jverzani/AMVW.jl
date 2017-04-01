@@ -89,28 +89,46 @@ end
     
     
     r1,r2 = ones(AMVW.ComplexRealRotator{Float64},2)
-    di = one(AMVW.ComplexRealRotator{Float64})
     AMVW.vals!(r1, complex(1.0, 2.0), 2.0); AMVW.idx!(r1, 1)
     AMVW.vals!(r2, complex(3.0, 2.0), 5.0); AMVW.idx!(r2, 1)
     M = A.as_full(r1,2) * A.as_full(r2, 2)
-    A.fuse(r1, r2, Val{:left}, di)
-    M1 = A.as_full(r1, 2) * A.as_full(di, 2)
+    alpha = A.fuse(r1, r2, Val{:left})
+    M1 = A.as_full(r1, 2) * diagm([alpha, conj(alpha)])
     u = M - M1
     @test maximum(norm.(u)) <= 4eps()
     
     
     r1,r2 = ones(AMVW.ComplexRealRotator{Float64},2)
-    di = one(AMVW.ComplexRealRotator{Float64})
     AMVW.vals!(r1, complex(1.0, 2.0), 2.0); AMVW.idx!(r1, 1)
     AMVW.vals!(r2, complex(3.0, 2.0), 5.0); AMVW.idx!(r2, 1)
     M = A.as_full(r1,2) * A.as_full(r2, 2)
-    A.fuse(r1, r2, Val{:right}, di)
-    M1 =  A.as_full(di, 2)* A.as_full(r2, 2) 
+    alpha = A.fuse(r1, r2, Val{:right})
+    M1 =  A.as_full(r2, 2)  * diagm([alpha, conj(alpha)])
     u = M - M1
     @test maximum(norm.(u)) <= 4eps()
 
 end
 
+## Cascade
+@testset "Cascade" begin
+    D1, Q1, Q2,Q3,Q4 =  ones(AMVW.ComplexRealRotator{Float64},5)
+    alpha = complex(1.0, -1.0)
+    alpha = alpha/norm(alpha)
+    AMVW.vals!(D1, alpha, 0.0); AMVW.idx!(D1, 1)
+    AMVW.vals!(Q2, complex(1.0, 2.0), 2.0); AMVW.idx!(Q2, 2)
+    AMVW.vals!(Q3, complex(3.0, 2.0), 5.0); AMVW.idx!(Q3, 3)
+    AMVW.vals!(Q4, complex(2.0, 2.0), 3.0); AMVW.idx!(Q4, 4)
+
+    M1 = A.as_full(D1, 5) * A.as_full(Q2, 5) * A.as_full(Q3, 5) * A.as_full(Q4, 5) 
+    D = ones(Complex{Float64}, 5)
+    Qs = [Q1, Q2, Q3, Q4]
+    A.cascade(Qs, D, alpha, 1, 4)
+    M2 = A.as_full(Q2, 5) * A.as_full(Q3, 5) * A.as_full(Q4, 5) * diagm(D)
+    
+    u = M1 - M2
+    @test maximum(norm.(u)) <= 4eps()
+
+end
 
 ##
 # turnover

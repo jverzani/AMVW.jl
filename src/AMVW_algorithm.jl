@@ -15,7 +15,7 @@ function AMVW_algorithm{T}(state::ShiftType{T})
         check_deflation(state)
         kk += 1
 
-#        show_status(state)
+##        show_status(state)
 
         k = state.ctrs.stop_index
 

@@ -192,6 +192,7 @@ mutable struct ComplexRealSingleShift{T} <: ShiftType{T}
     Ct::Vector{ComplexRealRotator{T}}  # We use C', not C here
 B::Vector{ComplexRealRotator{T}}
 D::Vector{Complex{T}}
+Dp::Vector{Complex{T}}
     REIGS::Vector{T}
     IEIGS::Vector{T}
     ## reusable storage
@@ -214,14 +215,15 @@ function Base.convert{T}(::Type{ComplexRealSingleShift}, ps::Vector{Complex{T}})
                        ones(ComplexRealRotator{T}, N), #Q
                        ones(ComplexRealRotator{T}, N), #Ct
                        ones(ComplexRealRotator{T}, N), #B
-                       ones(Complex{T}, N+1), # D
+                           ones(Complex{T}, N+1), # D
+                           ones(Complex{T}, 2), # Dp ## XXX try to cut allocations in passthrough
                        zeros(T, N),  zeros(T, N), #EIGS
                        one(ComplexRealRotator{T}), one(ComplexRealRotator{T}), #U, Ut
                        one(ComplexRealRotator{T}), # Di
                        zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
                        zeros(Complex{T}, 3, 2), # A Bk R
     zeros(T,2), zeros(T,2),
-    #    true,  # true for Wilkinson, false for Rayleigh
+    #    true,  # true for Wilkinson, false for Rayleigh.Make adjustable!
     false,
     AMVW_Counter(0,1,N-1, 0, N-2)
     )

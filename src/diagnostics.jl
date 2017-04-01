@@ -12,6 +12,8 @@ function as_full{T}(a::Rotator{T}, N::Int)
     A
 end
 
+
+
 function zero_out!{T}(A::Array{T}, tol=1e-12)
     A[norm.(A) .<= tol] = zero(T)
 end
@@ -44,6 +46,7 @@ function Base.full{T}(state::ShiftType{T}, what=:A)
     B = as_full(state.B[1],N+1); for i in 2:N B = B * as_full(state.B[i],N+1) end
     D = D_matrix(state)
     
+    
     #    x = -vcat(state.POLY[2:state.N], state.POLY[1], 1)
     par = iseven(state.N) ? one(T) : -one(T)
     x = -vcat(state.POLY[state.N-1:-1:1], -par * state.POLY[state.N],  par * 1)
@@ -53,7 +56,7 @@ function Base.full{T}(state::ShiftType{T}, what=:A)
     en1 = zeros(T, state.N+1); en1[N+1] = one(T)
 
     rho = transpose(en1) * Ct * e1  # scalar 
-    yt = -1/rho * transpose(en1)  * Ct * B * D
+    yt = -1/rho * transpose(en1)  * Ct * B
     # clean
     for i in eachindex(yt)
         if norm(yt[i]) < 1e-12
@@ -62,12 +65,12 @@ function Base.full{T}(state::ShiftType{T}, what=:A)
     end
     
     ## we have R = Z + x = Ct * (B * D + e1 * yt)
-    Z = Ct * B * D
+    Z = Ct * B 
     zero_out!(Z)
     
     x = Ct * e1 * yt 
     
-    R = Z + x
+    R = D*(Z + x)
     zero_out!(R)
     what == :R && return R
     

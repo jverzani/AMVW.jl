@@ -101,15 +101,35 @@ function Dflip{T}(d::ComplexRealRotator{T}, r::ComplexRealRotator{T})
     vals!(r, c*conj(alpha), s)
 end
 
+## We have this for left fuse and for deflation
+#
+#  Di                         Di                     
+#    Qi+1             Si+1     Di+1       Si+1   
+#        Qi+2    -->    Si+2    Di+2    =    Si+2  * diagm([alpha, I, conj(alpha)])
+#           ...           ...     ...          ...
+#             Qj            Sj      Dj          Sj
+function cascade(Qs, D, alpha, i, j)
+    # Q = CR(c,s) -> S = CR(c*conj(alpha), s)
+    for k in (i+1):j
+        c,s = vals(Qs[k])
+        vals!(Qs[k], c*conj(alpha), s)
+    end
+    D[i] *= alpha
+    D[j+1] *= conj(alpha)
+end
+
+
+
+
 ## Fuse
 ## fuse combines two rotations, a and b, into one,
 
 
-## For ComplexRealRotator, the result of a*b will not have a real sign, so
-## a diagonal matrix is needed. This is passed in via the 4th argument
-##
+## For ComplexRealRotator, the result of a*b will not have a real sign
+## we output by rotating by alpha.
+## return alpha so a*b = f(ab) * [alpha 0; 0 conj(alpha)]
 ## for left with have uv -> (u') Di
-function fuse{T}(a::ComplexRealRotator{T}, b::ComplexRealRotator{T},::Type{Val{:left}}, Di::ComplexRealRotator{T})
+function fuse{T}(a::ComplexRealRotator{T}, b::ComplexRealRotator{T},::Type{Val{:left}})
     #    idx(a) == idx(b) || error("can't fuse")
     u = a.c * b.c - conj(a.s) * b.s
     v = conj(a.c) * b.s + a.s * b.c
@@ -118,24 +138,23 @@ function fuse{T}(a::ComplexRealRotator{T}, b::ComplexRealRotator{T},::Type{Val{:
 
     a.c = u * alpha
     a.s = norm(v)
-    vals!(Di, conj(alpha), zero(T))
-    idx!(Di, idx(a))
+
+    conj(alpha)
 end
 
 # for right we have uv -> Di (v')
-function fuse{T}(a::ComplexRealRotator{T}, b::ComplexRealRotator{T}, ::Type{Val{:right}}, Di::ComplexRealRotator{T})
+function fuse{T}(a::ComplexRealRotator{T}, b::ComplexRealRotator{T}, ::Type{Val{:right}})
 #    idx(a) == idx(b) || error("can't fuse")
     u = a.c * b.c - conj(a.s) * b.s
     v = conj(a.c) * b.s + a.s * b.c
 
     
-    alpha =  v/norm(v)
+    alpha =  conj(v)/norm(v)
 
     b.c = u * alpha
     b.s = norm(v)
-    vals!(Di, conj(alpha), zero(T))
-    idx!(Di, idx(a))
-    
+
+    conj(alpha)
 end
 
 
@@ -148,12 +167,16 @@ function fuse{T}(a::Rotator{T}, b::Rotator{T},::Type{Val{:left}})
     u = a.c * b.c - conj(a.s) * b.s
     a.s = conj(a.c) * b.s + a.s * b.c
     a.c = u
+
+    one(T)
 end
 function fuse{T}(a::Rotator{T}, b::Rotator{T}, ::Type{Val{:right}})
 #    idx(a) == idx(b) || error("can't fuse")
     u = a.c * b.c - conj(a.s) * b.s
     b.s = conj(a.c) * b.s + a.s * b.c
     b.c = u
+
+    one(T)
 end
 
 
@@ -247,13 +270,22 @@ end
 ## passthrough
 ## Pass a rotator through a diagonal matrix with phase shifts
 ## D U -> U' D'
+## Here D[i] = D[1]
+## usually call with view(state.d, idx(U):idx(U)+1)
 function passthrough{T}(D, U::ComplexRealRotator{T})
-    i = idx(U)
-    alpha, beta = D[i], D[i+1]
+    alpha, beta = D[1], D[2]
 
     c, s = vals(U)
     u = c * alpha * conj(beta)
     v = s
     vals!(U, u, v)
-    D[i], D[i+1] = beta, alpha
+    D[1], D[2] = beta, alpha
+end
+
+function passthrough{T}(D::ComplexRealRotator{T}, U::ComplexRealRotator{T})
+    norm(D.s) <= 1e2*eps(T) || error("D not diagonal")
+    alpha, ds = vals(D)
+    c,s = vals(U)
+    vals!(U, c*alpha*alpha, s)
+    vals!(D, conj(alpha), ds)
 end

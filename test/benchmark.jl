@@ -110,19 +110,20 @@ p = poly(rs)
 
 @benchmark AMVW.poly_roots(p.a)
 # julia> @benchmark AMVW.poly_roots(p.a)
+# WARNING: Not all roots were found. The first 1 are missing.
 # BenchmarkTools.Trial: 
-#   memory estimate:  9.14 KiB
-#   allocs estimate:  260
+#   memory estimate:  8.72 KiB
+#   allocs estimate:  144
 #   --------------
-#   minimum time:     221.617 μs (0.00% GC)
-#   median time:      231.804 μs (0.00% GC)
-#   mean time:        240.734 μs (0.76% GC)
-#   maximum time:     5.035 ms (93.90% GC)
+#   minimum time:     98.348 μs (0.00% GC)
+#   median time:      131.089 μs (0.00% GC)
+#   mean time:        142.378 μs (1.12% GC)
+#   maximum time:     3.600 ms (92.80% GC)
 #   --------------
 #   samples:          10000
 #   evals/sample:     1
 #   time tolerance:   5.00%
-# memory tolerance: 1.00%
+#   memory tolerance: 1.00%
 
 @benchmark PolynomialRoots.roots(p.a)
 # BenchmarkTools.Trial: 
@@ -161,32 +162,22 @@ p = poly(rs)
 #   time tolerance:   5.00%
 #   memory tolerance: 1.00%
 
-@benchmark AMVW.poly_roots(p.a) # need to use state.ray=false
-## XXX Stil misses alot
+@benchmark AMVW.poly_roots(p.a) #  use state.ray=false
+# ## XXX Stil misses alot
 # BenchmarkTools.Trial: 
-#   memory estimate:  10.56 KiB
-#   allocs estimate:  230
+#   memory estimate:  5.88 KiB
+#   allocs estimate:  68
 #   --------------
-#   minimum time:     361.416 μs (0.00% GC)
-#   median time:      404.793 μs (0.00% GC)
-#   mean time:        453.384 μs (0.50% GC)
-#   maximum time:     5.241 ms (90.24% GC)
+#   minimum time:     354.586 μs (0.00% GC)
+#   median time:      401.278 μs (0.00% GC)
+#   mean time:        443.340 μs (0.30% GC)
+#   maximum time:     6.563 ms (90.24% GC)
 #   --------------
 #   samples:          10000
 #   evals/sample:     1
 #   time tolerance:   5.00%
 #   memory tolerance: 1.00%
 
-
-
-function poly_roots_cc(ps)
-    qs, k = AMVW.reverse_poly(ps)
-    state = AMVW.ComplexComplexSingleShift(qs)
-    AMVW.init_state(state)
-    AMVW.AMVW_algorithm(state)
-    rts = complex.(state.REIGS, state.IEIGS)
-end
-@benchmark poly_roots_cc(p.a) # has trouble finding roots
 
 @benchmark PolynomialRoots.roots(p.a)
 
@@ -350,3 +341,17 @@ residual_check(rs)
 # │ 1   │ 0.943682    │ 0.640697   │ 0.594116        │
 # │ 2   │ 0.0213801   │ 0.0183637  │ 0.0446998       │
 # │ 3   │ NaN         │ 1.93315e10 │ 0.0488876       │
+
+n = 10
+ts = linspace(1/n, 1.0, n) * 2pi
+rs = [complex(cos(t), sin(t)) for t in ts]
+p = poly(rs) 
+residual_check(rs)
+
+# 3×3 DataFrames.DataFrame
+# │ Row │ Polynomials │ AMVW        │ PolynomialRoots │
+# ├─────┼─────────────┼─────────────┼─────────────────┤
+# │ 1   │ 1.90211     │ 1.90211     │ 1.90211         │
+# │ 2   │ 3.39034e-15 │ 3.52069e-15 │ 3.5958e-16      │
+# │ 3   │ 3.39034e-15 │ 3.52069e-15 │ 3.5958e-16      │
+

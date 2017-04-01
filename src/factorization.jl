@@ -1,28 +1,20 @@
 ## 
 ## initial factorization
-## Could consolidate, later
-## (would need ZERO, ONE defn, and incorporate building up of D matrix
-function init_state{T}(state::ComplexRealSingleShift{T})
+## This is for complex real where we have a D matrix for phases
+function QDCB_factorization{T}(state::ComplexRealSingleShift{T})
 
     N, ps= state.N, state.POLY
     par = iseven(N) ? one(T) : -one(T)
-    # if isa(state, RealDoubleShift)
-    #     const ZERO, ONE = zero(T), one(T)
-    # else
-    #     const ZERO, ONE = zero(Complex{T}), one(Complex{T})
-    # end
-
 
     
     Q, Ct, B = state.Q, state.Ct, state.B
     state.D[:] = ones(Complex{T}, N+1)
+    Dn = ones(Complex{T}, 2)
     
     for ii = 1:(N-1)
-        ##        vals!(Q[ii], ZERO, ONE)
         vals!(Q[ii], zero(Complex{T}), one(T))
         idx!(Q[ii], ii)
     end
-    ##    vals!(Q[N], ONE, ZERO)
     vals!(Q[N], one(Complex{T}), zero(T))
     idx!(Q[N], N)
 
@@ -30,37 +22,35 @@ function init_state{T}(state::ComplexRealSingleShift{T})
     ## Working, but not quite what is in DFCC code
     ## there -par*ps[N], par*one(T); C is -conj(c), -s
     ## B[N] = par, -par...
-    ## Here we use: C' * B * D = Z (and not D C' B = Z)
-    c, s, temp = givensrot(par * ps[N], -par * one(T))
-    vals!(Ct[N], conj(c), -s); idx!(Ct[N], N)
+    c, s, temp = givensrot(par * conj(ps[N]), -par * one(T)) # <<<- conj(ps[N])!!
 
-    #    vals!(B[N], -par*s, par*conj(c))
-    # B * Dn * Dn'
-    v = conj(c)
-    alpha1 = conj(v)/norm(v)
-    vals!(B[N], -par*s*alpha1, par*norm(c))
-    state.D[N] = conj(alpha1)
-    state.D[N+1] = alpha1
+    nrm = norm(c)
+    alpha = c/nrm
     
+    vals!(Ct[N], conj(c), -s);
+    idx!(Ct[N], N)
 
-
+    vals!(B[N], -par*s*alpha, par*norm(c))
     idx!(B[N], N)
+    
+    state.D[N] = alpha
+    state.D[N+1] = conj(alpha)
     
     for ii in 2:N
         c, s, temp = givensrot(-ps[ii-1], temp)
-        vals!(Ct[N-ii + 1], conj(c), -s)
+        vals!(Ct[N-ii + 1], conj(c*alpha), -s)  # note alpha
         idx!(Ct[N-ii+1], N-ii+1)
         
-        vals!(B[N-ii + 1], c, s)
+        vals!(B[N-ii + 1], c*alpha, s)          # note alpha
         idx!(B[N-ii+1], N-ii+1)
     end
-
 end
-
+init_state{T}(state::ComplexRealSingleShift{T}) = QDCB_factorization(state)
 
 ## 
-## initial factorization
-function init_state{T}(state::ShiftType{T})
+## initial factorization for
+## RealDoubleShift and ComplexComplex
+function QCB_factorization{T}(state::ShiftType{T})
 
     N, ps= state.N, state.POLY
     par = iseven(N) ? one(T) : -one(T)
@@ -87,11 +77,9 @@ function init_state{T}(state::ShiftType{T})
     ## Working, but not quite what is in DFCC code
     ## there -par*ps[N], par*one(T); C is -conj(c), -s
     ## B[N] = par, -par...
-    ## Here we use: C' * B * D = Z (and not D C' B = Z)
     c, s, temp = givensrot(par * ps[N], -par * one(T))
     vals!(Ct[N], conj(c), -s); idx!(Ct[N], N)
 
-    #    vals!(B[N], -par * conj(s), par * c)
     vals!(B[N], -par*s, par*conj(c))     
     idx!(B[N], N)
     
@@ -105,13 +93,14 @@ function init_state{T}(state::ShiftType{T})
     end
 
 end
-
+init_state{T}(state::ShiftType{T}) = QCB_factorization(state)
 
 # If there is an issue, this function can be used to resetart the algorithm
 # could be merged with init_state?
 function restart{T}(state::ShiftType{T})
     # try again
     init_state(state)
+    
     for i in 1:state.N
         state.REIGS[i] = state.IEIGS[i] = zero(T)
     end
@@ -204,6 +193,9 @@ end
 # Ct[k] become trivial. Theorem 4.1 ensures this can't happen mathematically
 # though numerically, this is a different matter. The bound involves 1/||p|| which can be smaller than machine precision for, say, Wilknson(20)
 #
+
+
+# D values are only for ComplexRealSingleShift
 getD(state::ComplexRealSingleShift, k::Int) = state.D[k]
 getD{T}(state::ShiftType{T}, k::Int) = one(T)
 
@@ -217,7 +209,6 @@ function diagonal_block{T}(state::ShiftType{T}, k)
     if k == 2
         # rkk = -w_{k+1} / ck_s
 
-
         
         Bj_c, Bj_s = vals(B[k-1]); Bk_c, Bk_s = vals(B[k])
         Cj_c, Cj_s = vals(Ct[k-1]); Ck_c, Ck_s = vals(Ct[k])
@@ -228,8 +219,8 @@ function diagonal_block{T}(state::ShiftType{T}, k)
         # k=2 this is r_kk, r_k-1,k
 
         # for k
-        wl =  getD(state, k) * Bk_s
-        wk =  getD(state, k) *  conj(Bj_c) * Bk_c
+        wl =  Bk_s
+        wk =  conj(Bj_c) * Bk_c
 
 
         R[2,2] = - wl / Ck_s
@@ -238,9 +229,13 @@ function diagonal_block{T}(state::ShiftType{T}, k)
         R[1,2] = - (wk + Cj_c * conj(Ck_c) / Ck_s * wl) / Cj_s
 
         # for k - 1 we have (l=k)
-        wl = getD(state, k-1) * Bj_s
+        wl = Bj_s
         R[1,1] = - wl / Cj_s
         R[2,1] = complex(zero(T))
+
+        alpha, beta = getD(state, k-1), getD(state, k)
+        R[1,1] *= alpha; R[1,2] *= alpha
+        R[2,1] *= beta; R[2,2] *= beta
 
 # 3×2 Array{SymPy.Sym,2}
 # ⎡                           ___⎤
@@ -264,9 +259,9 @@ function diagonal_block{T}(state::ShiftType{T}, k)
 
         
         # for k
-        wl =  getD(state, k) *  Bk_s
-        wk =  getD(state, k) * conj(Bj_c) * Bk_c
-        wj = - getD(state, k) * conj(Bi_c) * conj(Bj_s) * Bk_c
+        wl =   Bk_s
+        wk =  conj(Bj_c) * Bk_c
+        wj = - conj(Bi_c) * conj(Bj_s) * Bk_c
         
         R[3,2] = - wl / Ck_s
         R[2,2] = - (wk + Cj_c * conj(Ck_c) / Ck_s * wl) / Cj_s
@@ -275,12 +270,17 @@ function diagonal_block{T}(state::ShiftType{T}, k)
                    Ci_c * conj(Ck_c) / (Cj_s * Ck_s) * wl) / Ci_s
 
         # downshift C indexes l->k; k->j; j->i; but keep w's (confusing)
-        wl = getD(state, k-1) * Bj_s
-        wk = getD(state, k-1) * conj(Bi_c) * Bj_c
+        wl =  Bj_s
+        wk =  conj(Bi_c) * Bj_c
         R[2,1] = - wl / Cj_s
         R[1,1] = - (wk + Ci_c * conj(Cj_c) / Cj_s * wl) / Ci_s
         R[3,1] = zero(T)
 
+        alpha, beta, gamma = getD(state, k-2), getD(state, k-1), getD(state, k)
+        R[1,1] *= alpha; R[1,2] *= alpha
+        R[2,1] *= beta;  R[2,2] *= beta
+        R[3,1] *= gamma; R[3,2] *= gamma
+        
 # make Qs from multiplying rotators
 # make Rs = [Sym("r$i$j") for i in 1:5, j in 1:5] |> triu
 # julia> (Qs * Rs)[2:4, 2:3] ## but indexing of r's is off! j-1 needed
@@ -381,7 +381,8 @@ end
 
 
 # deflate a term
-# turn on `show_status` to view sequence
+# deflation for ComplexReal is different, as
+# we replace Qi with I and move diagonal part into D
 function deflate{T}(state::ComplexRealSingleShift{T}, k)
 
     # when we deflate here we want to leave Q[k] = I and
@@ -392,16 +393,11 @@ function deflate{T}(state::ComplexRealSingleShift{T}, k)
     #     Dk Ik         Dk  Ik           Dk Ik
     #
     # then the Dk's are collected into [alpa 0; I; 0 conj(alpha)] (start,k+1)
-    copy!(state.Di, state.Q[k])
-    alpha, s = vals(state.Di)
+
+    alpha, s = vals(state.Q[k])
     vals!(state.Q[k], one(Complex{T}), zero(T)) # I
-    for j in k:-1:(state.ctrs.start_index+1)
-        i = idx(state.Di)
-        Dflip(state.Di, state.Q[i-1])
-        idx!(state.Di, i-1)
-    end
-    state.D[state.ctrs.start_index] *= alpha
-    state.D[k+1] *= conj(alpha)
+
+    cascade(state.Q, state.D, alpha, k, state.ctrs.stop_index) 
     
     # shift zero counter
     state.ctrs.zero_index = k      # points to a matrix Q[k] either RealRotator(-1, 0) or RealRotator(1, 0)
