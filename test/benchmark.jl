@@ -109,21 +109,19 @@ p = poly(rs)
 #   memory tolerance: 1.00%
 
 @benchmark AMVW.poly_roots(p.a)
-# julia> @benchmark AMVW.poly_roots(p.a)
-# WARNING: Not all roots were found. The first 1 are missing.
 # BenchmarkTools.Trial: 
-#   memory estimate:  8.72 KiB
-#   allocs estimate:  144
+#   memory estimate:  4.66 KiB
+#   allocs estimate:  56
 #   --------------
-#   minimum time:     98.348 μs (0.00% GC)
-#   median time:      131.089 μs (0.00% GC)
-#   mean time:        142.378 μs (1.12% GC)
-#   maximum time:     3.600 ms (92.80% GC)
+#   minimum time:     102.511 μs (0.00% GC)
+#   median time:      143.153 μs (0.00% GC)
+#   mean time:        157.052 μs (0.70% GC)
+#   maximum time:     49.993 ms (0.00% GC)
 #   --------------
 #   samples:          10000
 #   evals/sample:     1
 #   time tolerance:   5.00%
-#   memory tolerance: 1.00%
+# memory tolerance: 1.00%
 
 @benchmark PolynomialRoots.roots(p.a)
 # BenchmarkTools.Trial: 
