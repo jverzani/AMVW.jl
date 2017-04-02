@@ -122,23 +122,22 @@ end
 ## updates state.A
 ##
 # We look for r_j,k. Depending on |j-k| there are different amounts of work
-# we have wk = (B * D + e1 y^t) * ek = B* D * ek + e1 yk; we consider B*D* ek only B1 ... Bk D ek applies
+# we have wk = (B + e1 y^t) * ek = B * ek + e1 yk; we consider B* ek only B1 ... Bk D ek applies
 #
 
-## If we decompose as C'*B*D = Z, instead of D*C'*B we get
-# julia> Bi*Bj*Bk* D * [0,0,1,0]
-# julia> rotm(bi1, bi2, 1, 4) * rotm(bj1, bj2, 2, 4) * rotm(bk1, bk2, 3, 4) *D * [0,0,1,0]
+# julia> Bi*Bj*Bk * [0,0,1,0]
+# julia> rotm(bi1, bi2, 1, 4) * rotm(bj1, bj2, 2, 4) * rotm(bk1, bk2, 3, 4) * [0,0,1,0]
 # 4-element Array{SymPy.Sym,1}
 # ⎡       ___ ___ ⎤
-# ⎢bk₁⋅dk⋅bi₂⋅bj₂ ⎥
+# ⎢bk₁⋅bi₂⋅bj₂ ⎥
 # ⎢               ⎥
 # ⎢        ___ ___⎥
-# ⎢-bk₁⋅dk⋅bi₁⋅bj₂⎥
+# ⎢-bk₁⋅bi₁⋅bj₂⎥
 # ⎢               ⎥
 # ⎢         ___   ⎥
-# ⎢  bk₁⋅dk⋅bj₁   ⎥
+# ⎢  bk₁⋅bj₁   ⎥
 # ⎢               ⎥
-# ⎣    bk₂⋅dk     ⎦
+# ⎣    bk₂     ⎦
 # which gives [what, wj, wk, wl]
 
 # For rkk, we have Ck * W = [rkk, 0]
@@ -206,11 +205,9 @@ function diagonal_block{T}(state::ShiftType{T}, k)
     R = state.R # temp storage
 
     Q,Ct,B = state.Q, state.Ct, state.B
+    
     if k == 2
-        # rkk = -w_{k+1} / ck_s
-
-        
-        Bj_c, Bj_s = vals(B[k-1]); Bk_c, Bk_s = vals(B[k])
+        Bj_c, Bj_s = vals(B[k-1]);  Bk_c, Bk_s = vals(B[k])
         Cj_c, Cj_s = vals(Ct[k-1]); Ck_c, Ck_s = vals(Ct[k])
         Qj_c, Qj_s = vals(Q[k-1]);  Qk_c, Qk_s = vals(Q[k])
 
@@ -222,7 +219,7 @@ function diagonal_block{T}(state::ShiftType{T}, k)
         wl =  Bk_s
         wk =  conj(Bj_c) * Bk_c
 
-
+        # rkk = -w_{k+1} / ck_s
         R[2,2] = - wl / Ck_s
         
         # r_{k-1,k} =  -(wk + cj_c * conj(ck_c) / ck_s *wl)/cj_s
@@ -265,6 +262,7 @@ function diagonal_block{T}(state::ShiftType{T}, k)
         
         R[3,2] = - wl / Ck_s
         R[2,2] = - (wk + Cj_c * conj(Ck_c) / Ck_s * wl) / Cj_s
+        
         # -(wj + ci_c * conj(cj_c) / cj_s * wk + ci_c * conj(ck_c) / (cj_s * ck_s) * wl)/ci_s
         R[1,2] = -(wj + Ci_c * conj(Cj_c) / Cj_s * wk +
                    Ci_c * conj(Ck_c) / (Cj_s * Ck_s) * wl) / Ci_s

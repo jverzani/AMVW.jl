@@ -62,21 +62,10 @@ function getd{T}(a::RealRotator{T})
     sign(c)
 end
 
-
-## For complex, A "D" matrix is of type Di=[alpha 0; 0 conj(alpha)] We have to
-#
-# D    -->    D
-#   U      U 
-
-
-
-# (After absorbtion we leave an I for Q, not "D" matrix as in real case)
-
 ## This is main case
 #  Q           D Q
 #     D --> D 
     
-
 
 """
    D  --> D
@@ -142,7 +131,7 @@ function fuse{T}(a::ComplexRealRotator{T}, b::ComplexRealRotator{T},::Type{Val{:
     conj(alpha)
 end
 
-# for right we have uv -> Di (v')
+# for right we have uv -> (v') Di
 function fuse{T}(a::ComplexRealRotator{T}, b::ComplexRealRotator{T}, ::Type{Val{:right}})
 #    idx(a) == idx(b) || error("can't fuse")
     u = a.c * b.c - conj(a.s) * b.s
