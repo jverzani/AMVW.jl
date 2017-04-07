@@ -1,28 +1,19 @@
-## 
-## initial factorization
-## This is for complex real where we have a D matrix for phases
-function QDCB_factorization{T}(state::ComplexRealSingleShift{T})
-
-    N, ps= state.N, state.POLY
+## Factor R into Ct, B, Dn terms
+# R = 1 0 0 -v2 0
+#     0 1 0 -v3 0
+#     0 0 1 -v1 1
+#     0 0 0   0 0
+# So we represent R by [v1, v2, v3]
+# factors R so that D * Ct * B = Z
+function R_factorization{T <: Complex}(ps::Vector{T}, Ct, B, D)
+    N = length(ps)
     par = iseven(N) ? one(T) : -one(T)
-
     
-    Q, Ct, B = state.Q, state.Ct, state.B
-    state.D[:] = ones(Complex{T}, N+1)
-    Dn = ones(Complex{T}, 2)
-    
-    for ii = 1:(N-1)
-        vals!(Q[ii], zero(Complex{T}), one(T))
-        idx!(Q[ii], ii)
-    end
-    vals!(Q[N], one(Complex{T}), zero(T))
-    idx!(Q[N], N)
-
-
     ## Working, but not quite what is in DFCC code
     ## there -par*ps[N], par*one(T); C is -conj(c), -s
     ## B[N] = par, -par...
-    c, s, temp = givensrot(par * conj(ps[N]), -par * one(T)) # <<<- conj(ps[N])!!
+    ## Here we use: C' * B * D = Z (and not D C' B = Z)
+    c, s, temp = givensrot(par * conj(ps[N]), -par * one(T))
 
     nrm = norm(c)
     alpha = c/nrm
@@ -30,70 +21,133 @@ function QDCB_factorization{T}(state::ComplexRealSingleShift{T})
     vals!(Ct[N], conj(c), -s);
     idx!(Ct[N], N)
 
+    #    vals!(B[N], -par*s, par*conj(c))
+    # B * Dn * Dn'
     vals!(B[N], -par*s*alpha, par*norm(c))
-    idx!(B[N], N)
+
+    D[N] = alpha
+    D[N+1] = conj(alpha)
     
-    state.D[N] = alpha
-    state.D[N+1] = conj(alpha)
+    idx!(B[N], N)
     
     for ii in 2:N
         c, s, temp = givensrot(-ps[ii-1], temp)
-        vals!(Ct[N-ii + 1], conj(c*alpha), -s)  # note alpha
+        vals!(Ct[N-ii + 1], conj(c*alpha), -s)
         idx!(Ct[N-ii+1], N-ii+1)
         
-        vals!(B[N-ii + 1], c*alpha, s)          # note alpha
+        vals!(B[N-ii + 1], c*alpha, s)
         idx!(B[N-ii+1], N-ii+1)
     end
 end
-init_state{T}(state::ComplexRealSingleShift{T}) = QDCB_factorization(state)
 
-## 
-## initial factorization for
-## RealDoubleShift and ComplexComplex
-function QCB_factorization{T}(state::ShiftType{T})
-
-    N, ps= state.N, state.POLY
+## No D passed, we do a Ct * B factorization without a rotation to keep Complex Real
+## this can be Real/Real or Complex/Complex
+function R_factorization{T}(ps::Vector{T}, Ct, B)
+    N = length(ps)
     par = iseven(N) ? one(T) : -one(T)
-
     
-    if isa(state, RealDoubleShift)
-        const ZERO, ONE = zero(T), one(T)
-    else
-        const ZERO, ONE = zero(Complex{T}), one(Complex{T})
-    end
-    
-
-    
-    Q, Ct, B = state.Q, state.Ct, state.B
-
-    for ii = 1:(N-1)
-        vals!(Q[ii], ZERO, ONE)
-        idx!(Q[ii], ii)
-    end
-    vals!(Q[N], ONE, ZERO)
-    idx!(Q[N], N)
-
-
     ## Working, but not quite what is in DFCC code
     ## there -par*ps[N], par*one(T); C is -conj(c), -s
     ## B[N] = par, -par...
+    ## Here we use: C' * B * D = Z (and not D C' B = Z)
     c, s, temp = givensrot(par * ps[N], -par * one(T))
-    vals!(Ct[N], conj(c), -s); idx!(Ct[N], N)
 
-    vals!(B[N], -par*s, par*conj(c))     
+    
+    vals!(Ct[N], c, -s);
+    idx!(Ct[N], N)
+
+    #    vals!(B[N], -par*s, par*conj(c))
+    # B * Dn * Dn'
+    vals!(B[N], -par * s, par * c)
     idx!(B[N], N)
     
     for ii in 2:N
         c, s, temp = givensrot(-ps[ii-1], temp)
-        vals!(Ct[N-ii + 1], conj(c), -s)
+        vals!(Ct[N-ii + 1], c, -s)
         idx!(Ct[N-ii+1], N-ii+1)
         
         vals!(B[N-ii + 1], c, s)
         idx!(B[N-ii+1], N-ii+1)
     end
+end
+
+function Q_factorization{T}(state::ComplexRealSingleShift{T}, Q)
+    N = state.N
+    for ii = 1:(N-1)
+        vals!(Q[ii], zero(Complex{T}), one(T))
+        idx!(Q[ii], ii)
+    end
+    vals!(Q[N], one(Complex{T}), zero(T)) #I
+    idx!(Q[N], N)
+end
+
+function Q_factorization{T}(state::ShiftType{T}, Q)
+    N = state.N
+    for ii = 1:(N-1)
+        vals!(Q[ii], zero(T), one(T))
+        idx!(Q[ii], ii)
+    end
+    vals!(Q[N], one(T), zero(T))  # I
+    idx!(Q[N], N)
+end
+
+
+
+## 
+## initial factorization
+## This is for complex real where we have a D matrix for phases
+function QDCB_factorization{T}(state::ComplexRealSingleShift{T})
+    Q_factorization(state, state.Q)
+    R_factorization(state.POLY, state.Ct, state.B, state.D)
+end
+
+function QCB_factorization{T}(state::ShiftType{T})
+    Q_factorization(state, state.Q)
+    R_factorization(state.POLY, state.Ct, state.B)
+end
+
+init_state{T}(state::ComplexRealSingleShift{T}) = QDCB_factorization(state)
+init_state{T}(state::ShiftType{T}) = QCB_factorization(state)
+
+## Pencils are more involved
+## They have a decomposition, such as this basic one
+function simple_pencil{T}(ps::Vector{T})
+    n = length(ps) - 1
+    vs = ps[1:end-1]
+    ws = zeros(T, n)
+    ws[end] = ps[end]
+    vs, ws
+end
+
+## and we initialize a bit differently
+function init_state{T}(state::ComplexRealSingleShiftPencil{T}, decompose=simple_pencil)
+    ps = state.POLY
+    n = state.N - 1
+    ## vs, ws both length n with
+    ## vs[1] = ps_0; ws[n] = ps_n; vs[i+1] + ws[i] = ps_i
+
+    ## Need to generalize this
+    vs, ws = decompose(ps)
+
+    Q_factorization(state, state.Q)
+    # do W first, as we need to move D
+    R_factorization(vs, state.Ctp, state.Bp, state.D)
+    Dn = ComplexRealRotator(state.D[n], zero(T), n)
+    R_factorization(ws, state.Ct, state.B, state.D)
+
+    # now we have QD(Ct*B) *(Dn*Ctp*Bp)^(-1) = QD(Ct*B) * (Ctp *Bp)^(-1) * Dn^(-1). Unitary transform to get
+    # Dn^(-1) * Q D * 
+    # Q * (Dn * D) *(Ct*B) * (Ctp * Bp)^(-1)  # move Dn past Q
+    turnover(Dn, state.Q[n-1], state.Q[n], Val{:left})
+    i = idx(Dn)
+    state.D[i] *= Dn.c
+    state.D[i+1] *= conj(Dn.c)
 
 end
-init_state{T}(state::ShiftType{T}) = QCB_factorization(state)
+
+
+
+
 
 # If there is an issue, this function can be used to resetart the algorithm
 # could be merged with init_state?
@@ -384,6 +438,7 @@ end
 function deflate{T}(state::ComplexRealSingleShift{T}, k)
 
     # when we deflate here we want to leave Q[k] = I and
+
     # move Dk matrix over to merge with D
     # we do this by m
     # Qi           Qi              Dk Qi

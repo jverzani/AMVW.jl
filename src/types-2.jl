@@ -139,55 +139,74 @@ vals!{T}(r::ComplexComplexRotator{T}, c::T, s::T) = vals!(r, complex(c, zero(T))
 
 
 
+##################################################
+## Factorization Types ##
+##################################################
 
 
-### Shift Types
+abstract type FactorizationType{T, DoubleOrSingle, IsPencil, IsTwisted} end
 
+## SingleShift(:SS) -- Q, D, U, Ut
+## DoubleShift(:DS) -- Q, U, V, Ut, Vt, W
 
-@compat abstract type ShiftType{T} end
-struct RealDoubleShift{T} <: ShiftType{T} 
-    N::Int
-    POLY::Vector{T}
-    Q::Vector{RealRotator{T}}
-    Ct::Vector{RealRotator{T}}  # We use C', not C here
-    B::Vector{RealRotator{T}}
-    REIGS::Vector{T}
-    IEIGS::Vector{T}
-    ## reusable storage
-    U::RealRotator{T}
-    Ut::RealRotator{T}
-    V::RealRotator{T}
-    Vt::RealRotator{T}
-    W::RealRotator{T}
-    A::Matrix{T}    # for parts of A = QR
-    Bk::Matrix{T}   # for diagonal block
-    R::Matrix{T}    # temp storage, sometimes R part of QR
-    e1::Vector{T}   # eigen values e1, e2
-    e2::Vector{T}
-    ctrs::AMVW_Counter
+## :NoPencil -- Ct, B
+## :HasPencil -- Ct, B, Ct1, B1
+
+## :NotTwisted --
+## :IsTwisted -- sigma
+
+## All have: N, POLY, REIGS, IEIGS,
+## A, Bk, R, e1, e2, ctr
+
+## RDS, no pencil, not twisted
+struct Real_DoubleShift_NoPencil_NotTwisted{T} <: FactorizationType{T, Val{:DS}, Val{:NoPencil}, Val{:NotTwisted}}
+
+N::Int
+POLY::Vector{T}
+##
+Q::Vector{RealRotator{T}}
+Ct::Vector{RealRotator{T}}  # We use C', not C here
+B::Vector{RealRotator{T}}
+##
+REIGS::Vector{T}
+IEIGS::Vector{T}
+## reusable storage
+U::RealRotator{T}
+Ut::RealRotator{T}
+V::RealRotator{T}
+Vt::RealRotator{T}
+W::RealRotator{T}
+A::Matrix{T}    # for parts of A = QR
+Bk::Matrix{T}   # for diagonal block
+R::Matrix{T}    # temp storage, sometimes R part of QR
+e1::Vector{T}   # eigen values e1, e2
+e2::Vector{T}
+ctrs::AMVW_Counter
 end
 
-function Base.convert{T}(::Type{RealDoubleShift}, ps::Vector{T})
+function Base.convert{T}(::Type{FactorizationType{T, Val{:DoubleShift}, Val{:NoPencil}, Val{:NotTwisted}}}, ps::Vector{T})
+
     N = length(ps)
-    
-    RealDoubleShift(N, ps,
-                    _ones(RealRotator{T}, N), #Q
-                    _ones(RealRotator{T}, N), #Ct
-                    _ones(RealRotator{T}, N), #B
-                    zeros(T, N),  zeros(T, N), #EIGS
-                    one(RealRotator{T}), one(RealRotator{T}),
-                    one(RealRotator{T}), one(RealRotator{T}),
-                    one(RealRotator{T}), #U,U',V,V',W
-                    zeros(T, 2, 2),zeros(T, 3, 2),zeros(T, 3, 2), # A Bk R
-                    zeros(T,2), zeros(T,2),
-                    AMVW_Counter(0,1,N-1, 0, N-2)
+
+    Real_DoubleShift_NoPencil_NotTwisted(N, ps,
+                                         _ones(RealRotator{T}, N), #Q
+                                         _ones(RealRotator{T}, N), #Ct
+                                         _ones(RealRotator{T}, N), #B
+                                         zeros(T, N),  zeros(T, N), #EIGS
+                                         one(RealRotator{T}), one(RealRotator{T}),
+                                         one(RealRotator{T}), one(RealRotator{T}),
+    one(RealRotator{T}), #U,U',V,V',W
+    zeros(T, 2, 2),zeros(T, 3, 2),zeros(T, 3, 2), # A Bk R
+    zeros(T,2), zeros(T,2),
+    AMVW_Counter(0,1,N-1, 0, N-2)
     )
 end
 
-#######################################################
-## State for ComplexReal type
 
-mutable struct ComplexRealSingleShift{T} <: ShiftType{T} 
+# ComplexReal Double Shift, no pencil, not twisted
+
+mutable struct ComplexRealSingleShift_NoPencil_NotTwisted{T} <: FactorizationType{T, Val{:DS}, Val{:NoPencil}, Val{:NotTwisted}}
+
     N::Int
     POLY::Vector{Complex{T}}
     Q::Vector{ComplexRealRotator{T}}
@@ -210,7 +229,7 @@ ray::Bool
     ctrs::AMVW_Counter
 end
 
-function Base.convert{T}(::Type{ComplexRealSingleShift}, ps::Vector{Complex{T}})
+function Base.convert{T}(::Type{ComplexRealSingleShift}, ps::Vector{Complex{T}}; ray=true)
     N = length(ps)
     
     ComplexRealSingleShift(N, ps,
@@ -226,100 +245,7 @@ function Base.convert{T}(::Type{ComplexRealSingleShift}, ps::Vector{Complex{T}})
     zeros(Complex{T}, 3, 2), # A Bk R
     zeros(T,2), zeros(T,2),
     #    true,  # true for Wilkinson, false for Rayleigh.Make adjustable!
-    false,
-    AMVW_Counter(0,1,N-1, 0, N-2)
-    )
-end
-
-##################################################
-## State for ComplexComplex Rotator type (no D)
-
-struct ComplexComplexSingleShift{T} <: ShiftType{T} 
-    N::Int
-    POLY::Vector{Complex{T}}
-    Q::Vector{ComplexComplexRotator{T}}
-    Ct::Vector{ComplexComplexRotator{T}}  # We use C', not C here
-    B::Vector{ComplexComplexRotator{T}}  
-    REIGS::Vector{T}
-    IEIGS::Vector{T}
-    ## reusable storage
-U::ComplexComplexRotator{T}
-Ut::ComplexComplexRotator{T}
-    A::Matrix{Complex{T}}    # for parts of A = QR
-    Bk::Matrix{Complex{T}}   # for diagonal block
-    R::Matrix{Complex{T}}    # temp storage, sometimes R part of QR
-    e1::Vector{T}   # eigen values e1, e2, store as (re,imag)
-e2::Vector{T}
-ray::Bool
-    ctrs::AMVW_Counter
-end
-
-function Base.convert{T}(::Type{ComplexComplexSingleShift}, ps::Vector{Complex{T}})
-    N = length(ps)
-    
-    ComplexComplexSingleShift(N, ps,
-                              _ones(ComplexComplexRotator{T}, N), #Q
-                              _ones(ComplexComplexRotator{T}, N), #Ct
-                              _ones(ComplexComplexRotator{T}, N), #B
-                              zeros(T, N),  zeros(T, N), #EIGS
-                              one(ComplexComplexRotator{T}), one(ComplexComplexRotator{T}), #U, Ut
-                              zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
-    zeros(Complex{T}, 3, 2), # A Bk R
-    zeros(T,2), zeros(T,2),
-    false,  # true for Wilkinson, false for Rayleigh
-    AMVW_Counter(0,1,N-1, 0, N-2)
-    )
-end
-
-##################################################
-
-#######################################################
-## Pencils for ComplexReal type
-
-mutable struct ComplexRealSingleShiftPencil{T} <: ShiftType{T} 
-    N::Int
-    POLY::Vector{Complex{T}}
-    Q::Vector{ComplexRealRotator{T}}
-    Ct::Vector{ComplexRealRotator{T}}  # We use C', not C here
-B::Vector{ComplexRealRotator{T}}
-Ctp::Vector{ComplexRealRotator{T}}     # Pencil is Q D (Ct *B) (Ctp * Bp)^(-1)
-Bp::Vector{ComplexRealRotator{T}} 
-D::Vector{Complex{T}}
-Dp::Vector{Complex{T}}
-    REIGS::Vector{T}
-    IEIGS::Vector{T}
-    ## reusable storage
-U::ComplexRealRotator{T}
-Ut::ComplexRealRotator{T}
-Di::ComplexRealRotator{T}
-    A::Matrix{Complex{T}}    # for parts of A = QR
-    Bk::Matrix{Complex{T}}   # for diagonal block
-    R::Matrix{Complex{T}}    # temp storage, sometimes R part of QR
-    e1::Vector{T}   # eigen values e1, e2, store as (re,imag)
-e2::Vector{T}
-ray::Bool
-    ctrs::AMVW_Counter
-end
-
-function Base.convert{T}(::Type{ComplexRealSingleShiftPencil}, ps::Vector{Complex{T}})
-    N = length(ps) - 1
-    
-    ComplexRealSingleShiftPencil(N, ps,
-                                 _ones(ComplexRealRotator{T}, N), #Q
-                                 _ones(ComplexRealRotator{T}, N), #Ct
-                                 _ones(ComplexRealRotator{T}, N), #B
-                                 _ones(ComplexRealRotator{T}, N), #Ctp
-                                 _ones(ComplexRealRotator{T}, N), #Bp
-                                 _ones(Complex{T}, N+1), # D
-    _ones(Complex{T}, 2), # Dp ## XXX try to cut allocations in passthrough
-                       zeros(T, N),  zeros(T, N), #EIGS
-                       one(ComplexRealRotator{T}), one(ComplexRealRotator{T}), #U, Ut
-                       one(ComplexRealRotator{T}), # Di
-                       zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
-                       zeros(Complex{T}, 3, 2), # A Bk R
-    zeros(T,2), zeros(T,2),
-    #    true,  # true for Wilkinson, false for Rayleigh.Make adjustable!
-    false,
+    ray,
     AMVW_Counter(0,1,N-1, 0, N-2)
     )
 end
