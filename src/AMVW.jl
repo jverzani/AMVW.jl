@@ -8,10 +8,12 @@ using Compat
 include("types.jl")
 include("utils.jl")
 include("transformations.jl")
-include("bulge.jl")
 include("factorization.jl")
-include("diagnostics.jl")
+include("diagonal-block.jl")
+include("bulge.jl")
+include("deflation.jl")
 include("AMVW_algorithm.jl")
 
+include("diagnostics.jl")
 
 end # module

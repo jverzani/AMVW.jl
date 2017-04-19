@@ -35,11 +35,11 @@ end
 
 ## create Full matrix from state object. For diagnostic purposes.
 # we may or may not have a diagonal matrix to keep track or
-D_matrix{T}(state::ComplexRealSingleShift{T}) = diagm(state.D)
-D_matrix(state::ShiftType) = I
+D_matrix{T,P,Tw}(state::FactorizationType{T, Val{:SingleShift}, P, Tw}) = diagm(state.D)
+D_matrix(state::FactorizationType) = I
 
 #function Base.full{T}(state::ComplexRealSingleShift{T}, what=:A)
-function Base.full{T}(state::ShiftType{T}, what=:A)
+function Base.full{T, St}(state::FactorizationType{T, St, Val{:NoPencil}, Val{:NotTwisted}}, what=:A)
     N = state.N
     Q = as_full(state.Q[1],N+1); for i in 2:N Q = Q * as_full(state.Q[i],N+1) end
     Ct = as_full(state.Ct[1], N+1); for i in 2:N Ct =  as_full(state.Ct[i],N+1)*Ct end
@@ -48,9 +48,9 @@ function Base.full{T}(state::ShiftType{T}, what=:A)
     
     
     #    x = -vcat(state.POLY[2:state.N], state.POLY[1], 1)
-    par = iseven(state.N) ? one(T) : -one(T)
-    x = -vcat(state.POLY[state.N-1:-1:1], -par * state.POLY[state.N],  par * 1)
-    alpha = norm(x)
+#    par = iseven(state.N) ? one(T) : -one(T)
+#    x = -vcat(state.POLY[state.N-1:-1:1], -par * state.POLY[state.N],  par * 1)
+#    alpha = norm(x)
     e1 = zeros(T, state.N+1); e1[1]=one(T)
     en = zeros(T, state.N+1); en[N] = one(T)
     en1 = zeros(T, state.N+1); en1[N+1] = one(T)
@@ -81,7 +81,7 @@ end
 
 
 # simple graphic to show march of algorithm
-function show_status{T}(state::ShiftType{T})
+function show_status(state::FactorizationType)
     qs = [norm(u.s) for u in state.Q[state.ctrs.start_index:state.ctrs.stop_index]]
     minq = length(qs) > 0 ?  minimum(qs) : 0.0
 

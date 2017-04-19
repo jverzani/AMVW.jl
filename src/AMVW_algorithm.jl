@@ -1,28 +1,30 @@
 
 ## Main algorithm of AMV&W
 ## This follows that given in the paper very closely
-function AMVW_algorithm{T}(state::ShiftType{T})
+function AMVW_algorithm{T,St,P,Tw}(state::FactorizationType{T, St, P, Tw})
 
 
-    it_max = 60 * state.N
+    it_max = 20 * state.N
     kk = 0
 
     while kk <= it_max
 
         ## finished up!
         state.ctrs.stop_index <= 0 && return
+
+        state.ctrs.it_count += 1
+
         
         check_deflation(state)
         kk += 1
 
-##        show_status(state)
+#        show_status(state)
 
         k = state.ctrs.stop_index
 
         if state.ctrs.stop_index - state.ctrs.zero_index >= 2
             
             bulge_step(state)
-            state.ctrs.it_count += 1
             state.ctrs.tr -= 2
             
         elseif state.ctrs.stop_index - state.ctrs.zero_index == 1
@@ -72,68 +74,71 @@ function AMVW_algorithm{T}(state::ShiftType{T})
     warn("Not all roots were found. The first $(state.ctrs.stop_index-1) are missing.")
 end
 
-## qs is [p_{n-1}, p_{n-2}, ..., p_1, p_0] for
-## monic poly x^n + p_{n-1}x^{n-1} + ... + p_1 x + p_0
-## returns RealDoubleShift object
-function amvw{T <: Real}(qs::Vector{T})
-    state = RealDoubleShift(qs)
-    init_state(state)
-    AMVW_algorithm(state)
+
+
+## We decompose ps into qs or vs, ws for pencil
+## caller might look like
+function basic_decompose(ps)
+#    ps, k = deflate_leading_zeros(ps)  ## ASSUMED
+    qs = reverse_poly(ps)
+    qs
+end
+
+function basic_decompose_pencil{T}(ps::Vector{T})
+    N = length(ps)-1
+    qs = zeros(T, N)
+    qs[N]  = ps[end]
+    ps = -ps[1:N]
+    ps, qs
+end
+
+## for real like 8e-6 * N^2 run time
+##     allocations like c + 3n where c covers others.
+## for complex   1e-5 * N^2 run time (1.25 more)
+##     allocations like  3n too?
+function amvw{T <: Real}(ps::Vector{T})
+    state = convert(FactorizationType{T, Val{:DoubleShift}, Val{:NoPencil}, Val{:NotTwisted}}, ps)
+    init_state(state, basic_decompose)
     state
 end
 
-function amvw{T <: Real}(qs::Vector{Complex{T}})
-    #    state = ComplexSingleShift(qs)
-    state = ComplexRealSingleShift(qs)
-    init_state(state)
-    AMVW_algorithm(state)
+function amvw{T <: Real}(ps::Vector{Complex{T}})
+    state = convert(FactorizationType{T, Val{:SingleShift}, Val{:NoPencil}, Val{:NotTwisted}}, ps)
+    init_state(state, basic_decompose)
     state
 end
 
-"""
-Use AMVW algorithm doubleshift alorithm to find roots
-of the polynomial p_0 + p_1 x + p_2 x^2 + ... + p_n x^n encoded as
-`[p_0, p_1, ..., p_n]` (the same ordering used by `Polynomials`).
+function amvw_pencil{T <: Real}(ps::Vector{T}, decompose=basic_decompose_pencil)
+    state = convert(FactorizationType{T, Val{:DoubleShift}, Val{:HasPencil}, Val{:NotTwisted}}, ps)
+    init_state(state, decompose)
+    state
+end
 
-Returns an object of type `RealDoubleShift`.
+function amvw_pencil{T <: Real}(ps::Vector{Complex{T}}, decompose=basic_decompose_pencil)
+    state = convert(FactorizationType{T, Val{:SingleShift}, Val{:HasPencil}, Val{:NotTwisted}}, ps)
+    init_state(state, decompose)
+    state
+end
 
-Example: API needs work!
-```
-using Polynomials
-x = variable()
-p = poly(x - i/10 for i in 5:10)
-state = amvw(p.a)
-complex.(state.REIGS, state.IEIGS)
-```
-"""
-function poly_roots{T}(ps::AbstractVector{T})
-    ## roots of poly [p0, p1, ..., pn]    
-    qs, k = reverse_poly(ps)
 
-    # k is number of 0 factors
-    ## simple cases
-    n = length(qs)
-    if n == 0 
-        rts = complex.(zeros(k), zeros(k))
-    elseif n == 1
-        as = vcat([-real(qs[1])], zeros(k))
-        bs = vcat([-imag(qs[1])], zeros(k))
-        rts = complex.(as, bs)
-    elseif n == 2
-        if T <: Real
-            b,c = -(0.5)*qs[1], qs[2]
-            e1r, e1i, e2r, e2i = qdrtc(one(T), b, c)
+
+function poly_roots{T}(ps::Vector{T})
+    # deflate 0s
+    ps, K = deflate_leading_zeros(ps)
+
+    state = amvw(ps)
+    AMVW_algorithm(state)
+
+    if K > 0
+        ZS = zeros(T, K)
+        if T <: Complex
+            append!(state.REIGS, real.(ZS))
+            append!(state.IEIGS, real.(ZS))
         else
-            e1r, e1i, e2r, e2i = quadratic_equation(one(T), qs[1], qs[2])
-        end
-        as = vcat([e1r, e2r], zeros(k))
-        bs = vcat([e1i, e2i], zeros(k))
-        rts = complex.(as, bs)
-    else
-        state = amvw(qs)
-        as = vcat(state.REIGS, zeros(k))
-        bs = vcat(state.IEIGS, zeros(k))
-        rts = complex.(as, bs) 
+            append!(state.REIGS, ZS)
+            append!(state.IEIGS, ZS)
+        end            
     end
-    return rts
+
+    complex.(state.REIGS, state.IEIGS)
 end
