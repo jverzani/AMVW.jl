@@ -5,7 +5,7 @@
 #     0 0 0   0 0
 # So we represent R by [v1, v2, v3]
 # factors R so that D * Ct * B = Z
-function R_factorization{T}(ps::Vector{Complex{T}}, Ct, B)
+function R_factorization{T}(ps::Vector{Complex{T}}, Ct, B, beta=one(T))
     N = length(ps)
     par = iseven(N) ? one(Complex{T}) : -one(Complex{T})
     
@@ -17,6 +17,7 @@ function R_factorization{T}(ps::Vector{Complex{T}}, Ct, B)
 
     nrm = norm(c)
     alpha = c/nrm
+    alpha = alpha * beta
     
     vals!(Ct[N], conj(c), -s);
     idx!(Ct[N], N)
@@ -93,41 +94,6 @@ function Q_factorization{T, P}(state::FactorizationType{T, Val{:DoubleShift}, P,
     idx!(Q[N], N)
 end
 
-# function Q_factorization{T}(state::ComplexRealSingleShift{T}, Q)
-#     N = state.N
-#     for ii = 1:(N-1)
-#         vals!(Q[ii], zero(Complex{T}), one(T))
-#         idx!(Q[ii], ii)
-#     end
-#     vals!(Q[N], one(Complex{T}), zero(T)) #I
-#     idx!(Q[N], N)
-# end
-
-# function Q_factorization{T}(state::ShiftType{T}, Q)
-#     N = state.N
-#     for ii = 1:(N-1)
-#         vals!(Q[ii], zero(T), one(T))
-#         idx!(Q[ii], ii)
-#     end
-#     vals!(Q[N], one(T), zero(T))  # I
-#     idx!(Q[N], N)
-# end
-
-
-
-# ## 
-# ## initial factorization
-# ## This is for complex real where we have a D matrix for phases
-# function QDCB_factorization{T}(state::ComplexRealSingleShift{T})
-#     Q_factorization(state, state.Q)
-#     R_factorization(state.POLY, state.Ct, state.B, state.D)
-# end
-
-# function QCB_factorization{T}(state::ShiftType{T})
-#     Q_factorization(state, state.Q)
-#     R_factorization(state.POLY, state.Ct, state.B)
-# end
-
 
 ## Init State
 function init_state{T, St, P, Tw}(state::FactorizationType{T, St, P, Tw}, decompose)
@@ -151,14 +117,13 @@ function init_triu{T, St, Tw}(state::FactorizationType{T, St, Val{:HasPencil}, T
     # fill out Ct, B, pass back alpha
     # Need to so
     ps, qs = decompose(state.POLY)
-    alpha =  R_factorization(ps, state.Ct, state.B)
     beta =  R_factorization(qs, state.Ct1i, state.B1i)
     ## we need to reverse the qs
     for i in eachindex(state.B1i)
         copy!(state.Ct1i[i], state.Ct1i[i]')
         copy!(state.B1i[i], state.B1i[i]')
     end
-    ## how to combine alpha and beta? when St is SingleShift?
+    alpha =  R_factorization(ps, state.Ct, state.B, beta=beta)
     alpha
 end
 
