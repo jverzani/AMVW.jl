@@ -213,26 +213,25 @@ end
 
 mutable struct ComplexReal_SingleShift_NoPencil_NotTwisted{T} <: FactorizationType{T, Val{:SingleShift}, Val{:NoPencil}, Val{:NotTwisted}}
 
-    N::Int
-    POLY::Vector{Complex{T}}
+N::Int
+POLY::Vector{Complex{T}}
 Q::Vector{ComplexRealRotator{T}}
 D::Vector{Complex{T}}
 Ct::Vector{ComplexRealRotator{T}}  # We use C', not C here
 B::Vector{ComplexRealRotator{T}}
-Dp::Vector{Complex{T}}
+#
 REIGS::Vector{T}
 IEIGS::Vector{T}
-## reusable storage
+# reusable storage
 U::ComplexRealRotator{T}
 Ut::ComplexRealRotator{T}
-Di::ComplexRealRotator{T}
-    A::Matrix{Complex{T}}    # for parts of A = QR
-    Bk::Matrix{Complex{T}}   # for diagonal block
-    R::Matrix{Complex{T}}    # temp storage, sometimes R part of QR
-    e1::Vector{T}   # eigen values e1, e2, store as (re,imag)
+A::Matrix{Complex{T}}    # for parts of A = QR
+Bk::Matrix{Complex{T}}   # for diagonal block
+R::Matrix{Complex{T}}    # temp storage, sometimes R part of QR
+e1::Vector{T}   # eigen values e1, e2, store as (re,imag)
 e2::Vector{T}
 ray::Bool
-    ctrs::AMVW_Counter
+ctrs::AMVW_Counter
 end
 
 function Base.convert{T}(::Type{FactorizationType{T, Val{:SingleShift}, Val{:NoPencil}, Val{:NotTwisted}}}, ps::Vector{Complex{T}}; ray=true)
@@ -244,10 +243,8 @@ function Base.convert{T}(::Type{FactorizationType{T, Val{:SingleShift}, Val{:NoP
                            ones(Complex{T}, N+1), # D
                            _ones(ComplexRealRotator{T}, N), #Ct
                            _ones(ComplexRealRotator{T}, N), #B
-                           ones(Complex{T}, 2), # Dp ## XXX try to cut allocations in passthrough
                            zeros(T, N),  zeros(T, N), #EIGS
     one(ComplexRealRotator{T}), one(ComplexRealRotator{T}), #U, Ut
-    one(ComplexRealRotator{T}), # Di
     zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
     zeros(Complex{T}, 3, 2), # A Bk R
     zeros(T,2), zeros(T,2),
@@ -270,6 +267,7 @@ POLY::Vector{T}
 Q::Vector{RealRotator{T}}
 Ct::Vector{RealRotator{T}}  # We use C', not C here
 B::Vector{RealRotator{T}}
+#
 Ct1::Vector{RealRotator{T}}  # W = Ct * B
 B1::Vector{RealRotator{T}}   # 
 ##
@@ -281,6 +279,7 @@ Ut::RealRotator{T}
 V::RealRotator{T}
 Vt::RealRotator{T}
 W::RealRotator{T}
+#
 A::Matrix{T}    # for parts of A = QR
 Bk::Matrix{T}   # for diagonal block
 R::Matrix{T}    # temp storage, sometimes R part of QR
@@ -294,14 +293,14 @@ function Base.convert{T}(::Type{FactorizationType{T, Val{:DoubleShift}, Val{:Has
     N = length(ps) - 1
 
     Real_DoubleShift_HasPencil_NotTwisted(N, ps,
-                                         _ones(RealRotator{T}, N), #Q
-                                         _ones(RealRotator{T}, N), #Ct
-                                         _ones(RealRotator{T}, N), #B
-                                         _ones(RealRotator{T}, N), #Ct1
-                                         _ones(RealRotator{T}, N), #B1                                         
-                                         zeros(T, N),  zeros(T, N), #EIGS
-                                         one(RealRotator{T}), one(RealRotator{T}),
-                                         one(RealRotator{T}), one(RealRotator{T}),
+                                          _ones(RealRotator{T}, N), #Q
+                                          _ones(RealRotator{T}, N), #Ct
+                                          _ones(RealRotator{T}, N), #B
+                                          _ones(RealRotator{T}, N), #Ct1
+                                          _ones(RealRotator{T}, N), #B1                                         
+    zeros(T, N),  zeros(T, N), #EIGS
+    one(RealRotator{T}), one(RealRotator{T}),
+    one(RealRotator{T}), one(RealRotator{T}),
     one(RealRotator{T}), #U,U',V,V',W
     zeros(T, 2, 2),zeros(T, 3, 2),zeros(T, 3, 2), # A Bk R
     zeros(T,2), zeros(T,2),
@@ -310,33 +309,35 @@ function Base.convert{T}(::Type{FactorizationType{T, Val{:DoubleShift}, Val{:Has
 end
 
 
-# ComplexReal Double Shift, no pencil, not twisted
+# ComplexReal Double Shift, has pencil, not twisted
 
 mutable struct ComplexReal_SingleShift_HasPencil_NotTwisted{T} <: FactorizationType{T, Val{:SingleShift}, Val{:HasPencil}, Val{:NotTwisted}}
 
-    N::Int 
-    POLY::Vector{Complex{T}}
-    Q::Vector{ComplexRealRotator{T}}
+N::Int 
+POLY::Vector{Complex{T}}
+Q::Vector{ComplexRealRotator{T}}
 D::Vector{Complex{T}}
 Ct::Vector{ComplexRealRotator{T}}  # We use C', not C here
 B::Vector{ComplexRealRotator{T}}
+# pencil part
 D1::Vector{Complex{T}}
 Ct1::Vector{ComplexRealRotator{T}}  # not inverses
 B1::Vector{ComplexRealRotator{T}}
-Dp::Vector{Complex{T}}
-    REIGS::Vector{T}
-    IEIGS::Vector{T}
-    ## reusable storage
+#
+REIGS::Vector{T}
+IEIGS::Vector{T}
+## reusable storage
 U::ComplexRealRotator{T}
 Ut::ComplexRealRotator{T}
-Di::ComplexRealRotator{T}
-    A::Matrix{Complex{T}}    # for parts of A = QR
-    Bk::Matrix{Complex{T}}   # for diagonal block
-    R::Matrix{Complex{T}}    # temp storage, sometimes R part of QR
-    e1::Vector{T}   # eigen values e1, e2, store as (re,imag)
+#
+A::Matrix{Complex{T}}    # for parts of A = QR
+Bk::Matrix{Complex{T}}   # for diagonal block
+R::Matrix{Complex{T}}    # temp storage, sometimes R part of QR
+e1::Vector{T}   # eigen values e1, e2, store as (re,imag)
 e2::Vector{T}
+#
 ray::Bool
-    ctrs::AMVW_Counter
+ctrs::AMVW_Counter
 end
 
 function Base.convert{T}(::Type{FactorizationType{T, Val{:SingleShift}, Val{:HasPencil}, Val{:NotTwisted}}}, ps::Vector{Complex{T}}; ray=true)
@@ -344,17 +345,15 @@ function Base.convert{T}(::Type{FactorizationType{T, Val{:SingleShift}, Val{:Has
     N = length(ps) - 1
     
     ComplexReal_SingleShift_HasPencil_NotTwisted(N, ps,
-                           _ones(ComplexRealRotator{T}, N), #Q
+                                                 _ones(ComplexRealRotator{T}, N), #Q
                                                  ones(Complex{T}, N+1), # D
-                           _ones(ComplexRealRotator{T}, N), #Ct
-                           _ones(ComplexRealRotator{T}, N), #B
-    ones(Complex{T}, N+1), # D1
-                           _ones(ComplexRealRotator{T}, N), #Ct1
-                                                 _ones(ComplexRealRotator{T}, N), #B1
-                                                 ones(Complex{T}, 2), # Dp ## XXX try to cut allocations in passthrough
-                           zeros(T, N),  zeros(T, N), #EIGS
+                                                 _ones(ComplexRealRotator{T}, N), #Ct
+                                                 _ones(ComplexRealRotator{T}, N), #B
+                                                 ones(Complex{T}, N+1), # D1
+    _ones(ComplexRealRotator{T}, N), #Ct1
+    _ones(ComplexRealRotator{T}, N), #B1
+    zeros(T, N),  zeros(T, N), #EIGS
     one(ComplexRealRotator{T}), one(ComplexRealRotator{T}), #U, Ut
-    one(ComplexRealRotator{T}), # Di
     zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
     zeros(Complex{T}, 3, 2), # A Bk R
     zeros(T,2), zeros(T,2),

@@ -1,79 +1,4 @@
-# ## Factor R into Ct, B, Dn terms
-# # R = 1 0 0 -v2 0
-# #     0 1 0 -v3 0
-# #     0 0 1 -v1 1
-# #     0 0 0   0 0
-# # So we represent R by [v1, v2, v3]
-# # factors R so that D * Ct * B = Z
-# function R1_factorization{T}(ps::Vector{Complex{T}}, Ct, B, beta=one(T))
-#     N = length(ps)
-#     par = iseven(N) ? one(Complex{T}) : -one(Complex{T})
-    
-#     ## Working, but not quite what is in DFCC code
-#     ## there -par*ps[N], par*one(T); C is -conj(c), -s
-#     ## B[N] = par, -par...
-#     ## Here we use: C' * B * D = Z (and not D C' B = Z)
-#     c, s, temp = givensrot(par * conj(ps[N]), -par * one(Complex{T}))
-
-#     nrm = norm(c)
-#     alpha = c/nrm
-
-#     println("Diagonal: alpha=$alpha, beta=$beta")
-    
-#     alpha = alpha * beta
-    
-#     vals!(Ct[N], conj(c), -s);
-#     idx!(Ct[N], N)
-
-#     #    vals!(B[N], -par*s, par*conj(c))
-#     # B * Dn * Dn'
-#     vals!(B[N], -par*s*alpha, par*norm(c))
-#     idx!(B[N], N)
-    
-#     for ii in 2:N
-#         c, s, temp = givensrot(-ps[ii-1], temp)
-#         vals!(Ct[N-ii + 1], conj(c*alpha), -s)
-#         idx!(Ct[N-ii+1], N-ii+1)
-        
-#         vals!(B[N-ii + 1], c*alpha, s)
-#         idx!(B[N-ii+1], N-ii+1)
-#     end
-
-#     alpha
-# end
-
-# ## No D passed, we do a Ct * B factorization without a rotation to keep Complex Real
-# ## this can be Real/Real or Complex/Complex
-# function R1_factorization{T <: Real}(ps::Vector{T}, Ct, B)
-#     N = length(ps)
-#     par = iseven(N) ? one(T) : -one(T)
-    
-#     ## Working, but not quite what is in DFCC code
-#     ## there -par*ps[N], par*one(T); C is -conj(c), -s
-#     ## B[N] = par, -par...
-#     ## Here we use: C' * B * D = Z (and not D C' B = Z)
-#     c, s, temp = givensrot(par * ps[N], -par * one(T))
-
-    
-#     vals!(Ct[N], c, -s);
-#     idx!(Ct[N], N)
-
-#     #    vals!(B[N], -par*s, par*conj(c))
-#     # B * Dn * Dn'
-#     vals!(B[N], -par * s, par * c)
-#     idx!(B[N], N)
-    
-#     for ii in 2:N
-#         c, s, temp = givensrot(-ps[ii-1], temp)
-#         vals!(Ct[N-ii + 1], c, -s)
-#         idx!(Ct[N-ii+1], N-ii+1)
-        
-#         vals!(B[N-ii + 1], c, s)
-#         idx!(B[N-ii+1], N-ii+1)
-#     end
-
-#     one(T) # alpha
-# end
+## Factorization code
 
 ## Factor
 ##
@@ -82,7 +7,11 @@
 ##  0 0 -p3                   0 0 1 0 -1  +   -p3
 ##                            0 0 0 1 0       - 1
 ## we pass in ps = [-p1, -p2, ..., -pn, -1] the whol column including 1
-## We can leave as Ct * B * D or D * Ct * B (the defaul)
+## We can leave as Ct * B * D or D * Ct * B (the default)
+##
+## XXX -- user should not have to worry about use of `par` and `par * one(T)` for last two terms
+## should do this here, not in the `decompose` functions
+##
 function R_factorization{T}(ps::Vector{Complex{T}}, Ct, B, side=Val{:left})
 
     N = length(ps) - 1 # ps has 1 in it?
@@ -214,62 +143,6 @@ function init_Q{T, P}(state::FactorizationType{T, Val{:DoubleShift}, P, Val{:Not
     Q_factorization(state)
 end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#init_state{T}(state::ComplexRealSingleShift{T}) = QDCB_factorization(state)
-#init_state{T}(state::ShiftType{T}) = QCB_factorization(state)
-
-## Pencils are more involved
-## They have a decomposition, such as this basic one
-# function simple_pencil{T}(ps::Vector{T})
-#     n = length(ps) - 1
-#     vs = ps[1:end-1]
-#     ws = zeros(T, n)
-#     ws[end] = ps[end]
-#     vs, ws
-# end
-
-# ## and we initialize a bit differently
-# function init_state{T}(state::ComplexRealSingleShiftPencil{T}, decompose=simple_pencil)
-#     ps = state.POLY
-#     n = state.N - 1
-#     ## vs, ws both length n with
-#     ## vs[1] = ps_0; ws[n] = ps_n; vs[i+1] + ws[i] = ps_i
-
-#     ## Need to generalize this
-#     vs, ws = decompose(ps)
-
-#     Q_factorization(state, state.Q)
-#     # do W first, as we need to move D
-#     R_factorization(vs, state.Ctp, state.Bp, state.D)
-#     Dn = ComplexRealRotator(state.D[n], zero(T), n)
-#     R_factorization(ws, state.Ct, state.B, state.D)
-
-#     # now we have QD(Ct*B) *(Dn*Ctp*Bp)^(-1) = QD(Ct*B) * (Ctp *Bp)^(-1) * Dn^(-1). Unitary transform to get
-#     # Dn^(-1) * Q D * 
-#     # Q * (Dn * D) *(Ct*B) * (Ctp * Bp)^(-1)  # move Dn past Q
-#     turnover(Dn, state.Q[n-1], state.Q[n], Val{:left})
-#     i = idx(Dn)
-#     state.D[i] *= Dn.c
-#     state.D[i+1] *= conj(Dn.c)
-
-# end
 
 
 

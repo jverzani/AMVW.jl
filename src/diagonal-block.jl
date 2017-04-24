@@ -88,7 +88,7 @@
 
 # R = Ct* B
 # This finds R[(k-2):k,(k-1):k] from C and B,
-# If D is necessary, it must be done separately
+# If D is necessary, it must be done separately. (We put into getindex)
 # Here k-2 <= j <= k
 function Rjk(Ct, B, j, k)
     delta = k -j
@@ -257,7 +257,10 @@ function compute_QR{T,St, P}(state::FactorizationType{T, St, P, Val{:NotTwisted}
     end
 end
 
-
+##
+function compute_QR{T,St, P}(state::FactorizationType{T, St, P, Val{:IsTwisted}}, R, k)
+    println("XXX need to do this ....")
+end
 
 ##################################################
 

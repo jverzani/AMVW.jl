@@ -1,4 +1,3 @@
-
 function deflate_leading_zeros{T}(ps::Vector{T})
     ## trim any 0s from the end of ps
     N = findlast(!iszero, ps)

@@ -1,8 +1,15 @@
 ## Diagonostic code
 ##
 
-## make a rotator into a full matrix
+## create a rotation matrix
+function rotm{T}(a::T,b, i, N)
+    r = eye(T, N)
+    r[i:i+1, i:i+1] = [a -conj(b); b conj(a)]
+    r
+end
 
+
+## make a rotator into a full matrix
 function as_full{T}(a::Rotator{T}, N::Int)
     c,s = vals(a)
     i = idx(a)
@@ -13,7 +20,7 @@ function as_full{T}(a::Rotator{T}, N::Int)
 end
 
 
-
+# make zeros zeros
 function zero_out!{T}(A::Array{T}, tol=1e-12)
     A[norm.(A) .<= tol] = zero(T)
 end
@@ -38,6 +45,7 @@ end
 D_matrix{T,P,Tw}(state::FactorizationType{T, Val{:SingleShift}, P, Tw}) = diagm(state.D)
 D_matrix(state::FactorizationType) = I
 
+## We can compute yt from the decomposition of R into: R = Ct *(B + yt e1) by multiplying on left by e_n+1^T...
 function _compute_yt(Cts, Bs, N, T)
     Ct = as_full(Cts[1], N+1); for i in 2:N Ct =  as_full(Cts[i],N+1)*Ct end
     B = as_full(Bs[1],N+1); for i in 2:N B = B * as_full(Bs[i],N+1) end
@@ -95,6 +103,7 @@ function compute_R(Cts, Bs, D, N, T)
     R
 end
 
+# Go from efficiently stored state to full matrix
 function Base.full{T, St}(state::FactorizationType{T, St, Val{:NoPencil}, Val{:NotTwisted}}, what=:A)
     N = state.N
     Q = as_full(state.Q[1],N+1); for i in 2:N Q = Q * as_full(state.Q[i],N+1) end
@@ -109,7 +118,6 @@ function Base.full{T, St}(state::FactorizationType{T, St, Val{:NoPencil}, Val{:N
     zero_out!(A)
     A
 end
-
 
 
 function Base.full{T, St}(state::FactorizationType{T, St, Val{:HasPencil}, Val{:NotTwisted}}, what=:A)
@@ -141,11 +149,3 @@ function show_status(state::FactorizationType)
     x[state.ctrs.stop_index+2] = "Δ"
     println(join(x, ""), " ($minq)")
 end
-
-## create a rotation matrix
-function rotm{T}(a::T,b, i, N)
-    r = eye(T, N)
-    r[i:i+1, i:i+1] = [a -conj(b); b conj(a)]
-    r
-end
-

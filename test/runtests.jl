@@ -250,3 +250,19 @@ end
     @test maximum(norm.(rts - rs)) <= 1e-6
     
 end
+
+@testset "pencil factorization" begin
+    pr = poly([1.0, 2.0, 3.0])
+    state = AMVW.amvw_pencil(coeffs(pr)); AMVW.AMVW_algorithm(state)
+    rts = complex.(state.REIGS, state.IEIGS)
+    @test maximum(norm.(pr.(rts))) <= 1e-12
+
+    pi = poly([im+1.0, 2.0, 3.0])
+    state = AMVW.amvw_pencil(coeffs(pi)); AMVW.AMVW_algorithm(state)
+    rts = complex.(state.REIGS, state.IEIGS)
+    @test maximum(norm.(pi.(rts))) <= 1e-12
+
+end
+
+    
+    
