@@ -1,19 +1,21 @@
-
-## take poly [p0, p1, ..., pn] and return
-## [q_m-1, q_m-2, ..., q0], k
-## where we trim of k roots of 0, and then make p monic, then reverese
-## monomial x^5
-function reverse_poly{T}(ps::Vector{T})
+function deflate_leading_zeros{T}(ps::Vector{T})
     ## trim any 0s from the end of ps
     N = findlast(!iszero, ps)
     K = findfirst(!iszero, ps)
 
     N == 0 && return(zeros(T,0), length(ps))
     ps = ps[K:N]
+    ps, K-1
+end
 
-    
+## take poly [p0, p1, ..., pn] and return
+## [q_m-1, q_m-2, ..., q0], k
+## where we trim of k roots of 0, and then make p monic, then reverese
+## monomial x^5
+function reverse_poly{T}(ps::Vector{T})
+    # assume we have called deflate_leading_zeros
     qs = reverse(ps./ps[end])[2:end]
-    qs, K-1
+    qs
 end
 
 #

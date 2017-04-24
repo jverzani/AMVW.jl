@@ -1,35 +1,26 @@
 ## Bulge chasing
 
-## chase bulge from top to bottom until final absorbtion 
-function bulge_step{T}(state::ShiftType{T})
+## A bulge is introduce by a unitary transformation. IN the single shift case this is just U^t A U; for
+## the double shift case this is (VU)^T A (VU).
+## In either case, we have three steps:
+##
+## * create the unitary transformations (U or (V,U)) -- create_bulge
+## * absorb the left side -- absorb Ut
+## * chase the right side down until it is absorbed -- absorb_U
+##
+function bulge_step{T, St, P}(state::FactorizationType{T, St, P, Val{:NotTwisted}})
     create_bulge(state)
-    prepare_bulge(state)
-    chase_bulge(state)
-    absorb_bulge(state)
+    absorb_Ut(state)
+    absorb_U(state)
 end
 
+##################################################
+## Create Bulge
+## One for DoubleShift/SingleShift
+## but Pencil or Twisted shouldn't matter as they come out in diagonalblock.
 
-
-## RealDoubleShift
-##
-## There are two rotators, U, V, to chase through the matrix using the following operations
-##                                   [         [
-## a unitary transform: basically U    [   -->   [     U; as we just hit both sides by U' A U and U' U is I
-##                                       [          [
-##
-##
-## A fuse   [ [ -> [
-##
-## A turnover    [   M -->   [     where M moves through a descending or ascending structure
-##                 [       M   [
-##
-## a "D" flip:  D    --->     D
-##                [        [
-##
-
-
-## The bulge is created by  (A-rho1) * (A - rho2) * e_1 where rho1 and rho2 are eigenvalue or random
-function create_bulge{T}(state::RealDoubleShift{T})
+# ## The bulge is created by  (A-rho1) * (A - rho2) * e_1 where rho1 and rho2 are eigenvalue or random
+function create_bulge{T, P, Tw}(state::FactorizationType{T, Val{:DoubleShift}, P, Tw})
 
     if mod(state.ctrs.it_count, 15) == 0
         
@@ -103,164 +94,8 @@ function create_bulge{T}(state::RealDoubleShift{T})
 
 end
 
-## make W on left side
-#
-# initial            Q0
-# we do turnover U1'     Q1     -->    U1'        -->    U1'          -->    Q1
-#                    V1'    Q2      Q1     V1' Q2     Q1     (V1'Q2)       W1  Q2
-#
-# With this, W will be kept on the left side until the last step, U,V
-# move through left to right by one step, right to left by unitariness
-#
-#      Q0                       Q0                     Q0               Q0
-#  U1'     Q1        U1'    Q1*         ->         U1            -->       U1*
-#      V1'    Q3 ->     V1'         Q3      Q1**      V1'   Q3        W          (V1'Q3)
-#
-# Q0 is (p,0) rotator, p 1 or -1. We have
-#    Q0  --> Q0
-#  R             (r, pr2)
-function prepare_bulge{T}(state::RealDoubleShift{T})
-    
-    # N = state.N
-    # as_full(state.V', N+1)* as_full(state.U', N+1)* full(state) * as_full(state.U, N+1) * as_full(state.V, N+1) |> eigvals |> println
 
-
-    k = state.ctrs.start_index
-
-    vals!(state.Ut, state.U.c, -state.U.s); idx!(state.Ut, idx(state.U))
-    vals!(state.Vt, state.V.c, -state.V.s); idx!(state.Vt, idx(state.V))
-
-    copy!(state.W, state.Q[k])
-    p = k == 1 ? one(T) : state.Q[k-1].c  #  zero index implies Q0 = RR(1,0) or RR(-1,0)
-    dflip(state.W, p)
-    
-    turnover(state.Ut, state.Vt, state.W, Val{:right})
-    fuse(state.Vt, state.Q[k+1], Val{:right})  # V' Q3
-    dflip(state.Ut, p)
-    vals!(state.Q[k], state.Ut.c, state.Ut.s) 
-    
-end
-
-## Bulge chasing moves U, V fr from R to L through B then C then Q where an interaction with W allows
-## a subsequent unitary operation to move U,V back to the right, one step down
-## The case when Ct[i] and B[i] are identical allow a speed up.
-
-function one_bulge_chase_shortcut{T}(state::RealDoubleShift{T})
-    i = idx(state.V)
-    # borrow Vt, Ut here to store a copy
-    copy!(state.Vt, state.V)
-    copy!(state.Ut, state.U)    
-    
-    turnover(state.B[i],    state.B[i+1], state.Vt, Val{:right})
-    turnover(state.B[i-1],  state.B[i],   state.Ut, Val{:right})
-    for k in -1:1
-        a,b = vals(state.B[i+k])
-        vals!(state.Ct[i+k], a, -b) # using copy!(Ct, B') is slower
-    end
-
-    turnover(state.Q[i],    state.Q[i+1], state.V, Val{:right})
-    turnover(state.Q[i-1],  state.Q[i],   state.U, Val{:right})
-    turnover(state.W,       state.V,      state.U, Val{:left})
-    
-end
-
-function one_bulge_chase{T}(state::RealDoubleShift{T})
-    i = idx(state.V)
-    turnover(state.B[i],    state.B[i+1], state.V, Val{:right})
-    turnover(state.Ct[i+1], state.Ct[i],  state.V, Val{:right})
-
-    
-    j = i - 1
-    turnover(state.B[j],    state.B[j+1], state.U, Val{:right})
-    turnover(state.Ct[j+1], state.Ct[j],  state.U, Val{:right})
-
-    turnover(state.Q[i],    state.Q[i+1], state.V, Val{:right})
-    turnover(state.Q[j],    state.Q[j+1], state.U, Val{:right})
-    turnover(state.W,       state.V,      state.U, Val{:left})
-
-end
-
-
-function chase_bulge{T}(state::RealDoubleShift{T})
-
-    # println("  begin chase at level $(state.V.i)")
-    # as_full(state.W, state.N+1)* full(state) * as_full(state.V, state.N+1) * as_full(state.U, state.N+1) |> eigvals |> println
-    
-    # one step
-    i = idx(state.V)
-
-    ## When  i < tr  C_i = B_i. This happens in the early steps
-    ## this means fewer turnovers, but at a price of more allocations
-    while i < state.ctrs.stop_index # loops from start_index to stop_index - 1
-        if i <= state.ctrs.tr
-            one_bulge_chase_shortcut(state) 
-        else
-            one_bulge_chase(state)
-        end
-
-        i += 1
-
-    end
-
-    # println("end chase")
-    # as_full(state.W, state.N+1)* full(state) * as_full(state.V, state.N+1) * as_full(state.U, state.N+1) |> eigvals |> println    
-end
-
-
-## Bulge is absorbed by moving V through, then U going throug two trips.
-function absorb_bulge{T}(state::RealDoubleShift{T})
-
-    # println("absorb 0")
-    # as_full(state.W, state.N+1) * full(state) * as_full(state.V, state.N+1) * as_full(state.U, state.N+1) |> eigvals |> println    
-
-    
-    # first V goes through B, C then fuses with Q
-    i = idx(state.V)
-
-    turnover(state.B[i],     state.B[i+1], state.V, Val{:right})
-    turnover(state.Ct[i+1],  state.Ct[i],  state.V, Val{:right})
-
-    ## We may be fusing Q            P  --> (Q') 
-    #                      RR(-1,0)               RR(-1,0)
-    #
-    
-    p = getd(state.Q[i+1])
-    dflip(state.V, p)
-    fuse(state.Q[i], state.V, Val{:left}) # fuse Q*V -> Q
-
-
-    # println("absorb 1")
-    # as_full(state.W, state.N+1) * full(state) *  as_full(state.U, state.N+1) |> eigvals |> println        
-
-    
-    # Then bring U through B, C, and Q to fuse with W
-    j = idx(state.U)
-    turnover(state.B[j],     state.B[j+1], state.U)
-    turnover(state.Ct[j+1],  state.Ct[j],  state.U)
-    turnover(state.Q[j],     state.Q[j+1], state.U)
-    fuse(state.W, state.U, Val{:right})
-
-    # println("absorb 2")
-    # as_full(state.U, state.N+1) * full(state) |> eigvals |> println    
-    
-    # similarity transformation, bring through then fuse with Q
-    j = idx(state.U)
-    turnover(state.B[j], state.B[j+1], state.U, Val{:right})
-    turnover(state.Ct[j+1],  state.Ct[j], state.U)
-    p = getd(state.Q[j+1])
-    dflip(state.U, p)
-    fuse(state.Q[j], state.U, Val{:left})
-
-    # println("absorb final")
-    # full(state) |> eigvals |> println    
-end
-
-
-
-##################################################
-## ComplexRealSingleShift
-
-function create_bulge{T}(state::ComplexRealSingleShift{T})
+function create_bulge{T, P, Tw}(state::FactorizationType{T, Val{:SingleShift}, P, Tw})
 
     if mod(state.ctrs.it_count, 15) == 0
         
@@ -294,210 +129,215 @@ function create_bulge{T}(state::ComplexRealSingleShift{T})
     nothing
 end
         
-  
-##
-## U Qi            (fUQi) Di          (fUQi)   Di           (fUQi)    
-##      Qj    -->          Qj   -->         Qj   Dj    -->        Qj     D  
-##         Qk                Qk                Qk  Dk                Qk 
-function prepare_bulge{T}(state::ComplexRealSingleShift{T})
-    i = idx(state.Ut)
 
-    # when deflating here we ensure Q[i-1] is an identity matrix
-    # so no dflip
-    
+##################################################
+## Absorb Ut
+## We have the bulge is generated by
+## Ut * A * U in the singleshift case and
+## Ut * Vt * A * V * U in the DoubleShift Case
+## This combines the Ut with A (or Ut, Vt, A into W,A)
+
+
+# This depends on Q, D, and possible sigma but not Pencil case
+function absorb_Ut{T, P}(state::FactorizationType{T, Val{:SingleShift}, P, Val{:NotTwisted}})
+    i = idx(state.Ut)
     alpha = fuse(state.Ut, state.Q[i], Val{:right})
     cascade(state.Q, state.D, alpha, i, state.ctrs.stop_index)
-    
-end       
-
-##
-function one_bulge_chase_shortcut{T}(state::ComplexRealSingleShift{T})
-    ## savings are one fewer turnover, a few copies
-    i = idx(state.U)
-
-
-    copy!(state.Ut, state.U)
-    turnover(state.B[i],    state.B[i+1], state.Ut, Val{:right})
-    for k in 0:1
-        a,b = vals(state.B[i+k])
-        vals!(state.Ct[i+k], conj(a), -b) # using copy!(Ct, B') is slower
-    end
-
-    i = idx(state.U)
-    # passthrough(view(state.D,i:(i+1)), state.U)
-    state.Dp[1], state.Dp[2] = state.D[i], state.D[i+1]
-    passthrough(state.Dp, state.U)
-    state.D[i],state.D[i+1] = state.Dp[1], state.Dp[2]
-    
-    turnover(state.Q[i],    state.Q[i+1], state.U, Val{:right}) 
-    
 end
 
-# Moving QCBU_i -> QC(BUi) -> QCUi1B -> Q(CUi1)B -> QUiCB -> Ui1 Q C B
-function one_bulge_chase{T}(state::ComplexRealSingleShift{T})
-    # can consolidate first turnovers
-    i = idx(state.U)
-    turnover(state.B[i],    state.B[i+1], state.U, Val{:right})
-    turnover(state.Ct[i+1], state.Ct[i],  state.U, Val{:right})
-#    passthrough(view(state.D,i:(i+1)), state.U) #allocates
-    state.Dp[1], state.Dp[2] = state.D[i], state.D[i+1]
-    passthrough(state.Dp, state.U)
-    state.D[i],state.D[i+1] = state.Dp[1], state.Dp[2]
+# This depends on Q
+function absorb_Ut{T, P}(state::FactorizationType{T, Val{:DoubleShift}, P, Val{:NotTwisted}})
+
+    copy!(state.Ut, state.U'); copy!(state.Vt, state.V')
     
-    turnover(state.Q[i],    state.Q[i+1], state.U, Val{:right})    
-end
+    i = idx(state.U); j  = i + 1
+    
+    copy!(state.W, state.Q[i]) # rename Qi as W
+    p = i == 1 ? one(T) : getd(state.Q[i-1]) #  zero index implies Q0 = RR(1,0) or RR(-1,0)
 
-# Q Ct B D U -> Q Ct B (D U) -> Q Ct (B U) D -> Q (Ct U) B D ->
-# (Q U) Ct B D -> U Q Ct B D  then wrap via unitary operation
-function chase_bulge{T}(state::ComplexRealSingleShift{T})
+    dflip(state.W, p)
+    turnover(state.Ut, state.Vt, state.W, Val{:right})
+    fuse(state.Vt, state.Q[j], Val{:right})  # V' Q3
+    dflip(state.Ut, p)
 
-    # one step
-    i = idx(state.U)
-
-    ## When  i < tr  C_i = B_i. This happens in the early steps
-    ## this means fewer turnovers, but at a price of more allocations
-    while i < state.ctrs.stop_index # loops from start_index to stop_index - 1
-        if i <= state.ctrs.tr
-            one_bulge_chase_shortcut(state) 
-        else
-            one_bulge_chase(state)
-        end
-        i += 1
-
-    end
+    vals!(state.Q[i], vals(state.Ut)...) # rename Ut as Qi
 
 end
 
-##
-## pass through Ct*B with two turnovers
-## pass throudh D
-## fuse Q & U
-## absorb phase into D
-function absorb_bulge{T}(state::ComplexRealSingleShift{T})
-    i = idx(state.U)
-    
-    turnover(state.B[i],    state.B[i+1], state.U, Val{:right})
-    turnover(state.Ct[i+1], state.Ct[i],  state.U, Val{:right})
 
 
-#    passthrough(view(state.D, i:(i+1)), state.U)
-    state.Dp[1], state.Dp[2] = state.D[i], state.D[i+1]
-    passthrough(state.Dp, state.U)
-    state.D[i],state.D[i+1] = state.Dp[1], state.Dp[2]
-    
 
-    # fuse and then take care of new alpha by moving into state.D
-    alpha = fuse(state.Q[i], state.U, Val{:left})
-    
-    state.D[i] *= alpha
-    state.D[i+1] *= conj(alpha)
-    
-end
 
-##################################################
+
 
 
 ##################################################
+## Absorb U
+## After U absorbtion we have either
+## A * U or (W,A) * V * U
+## THis chases U or (V*U) through until the value can be absorbed
+## The available operations are
+## * turnover
+## * unitary move (which doesn't change U, it just moves it from left to right)
+## * fuse
+## This just pushes work to passthrough_triu and passthroug_Q
+function absorb_U{T, St, P}(state::FactorizationType{T, St, P, Val{:NotTwisted}})
+    flag = false
+    while !flag
+        passthrough_triu(state)
+        flag = passthrough_Q(state)
+    end
+end
 
-## ComplexComplexSingleShift 
-function create_bulge{T}(state::ComplexComplexSingleShift{T})
+## pass through triu
+## we one or two triangular matrices to pass through (QV or QVW^(-1)). THis passese U
+## through from right to left
+## we can also do left to right, needed with twisted factorizations
 
-    if mod(state.ctrs.it_count, 15) == 0
-        
-        t = rand() * pi
-        if state.ray
-            shift = complex(cos(t), sin(t))
-        else
-            shift = complex(cos(t), zero(T))
-        end
-        
+
+# right to left is default
+passthrough_triu(state::FactorizationType) = passthrough_triu(state, Val{:right}) # right is default
+
+## singleshift case has only one rotator to pass through
+function passthrough_triu{T, P, Tw}(state::FactorizationType{T, Val{:SingleShift}, P, Tw}, dir)
+    _passthrough_triu(state.U, state, dir)
+end
+
+
+## For double shift we have V then U
+## XXX can speed this up via `tr` trick!
+function passthrough_triu{T, P, Tw}(state::FactorizationType{T, Val{:DoubleShift}, P, Tw}, ::Type{Val{:right}})
+    _passthrough_triu(state.V, state, Val{:right})
+    _passthrough_triu(state.U, state, Val{:right})    
+end
+
+function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:DoubleShift}, Val{:NoPencil}, Tw}, ::Type{Val{:left}})
+    _passthrough_triu(state.U, state, Val{:left})    
+    _passthrough_triu(state.V, state, Val{:left})
+end
+
+## lower level work of passing a rotatator through the triangular part
+## There may be one (no pencil) or two such to pass through
+## pass a specified U through
+function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St, Val{:NoPencil}, Tw}, ::Type{Val{:right}})
+
+    i = idx(U)
+
+    turnover(state.B[i], state.B[i+1], U, Val{:right})
+    turnover(state.Ct[i+1], state.Ct[i], U, Val{:right})
+    
+    St == Val{:SingleShift} && passthrough(state.D, U)
+    
+end
+
+function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St, Val{:NoPencil}, Tw}, ::Type{Val{:left}})
+
+    i = idx(U)
+
+    St == Val{:SingleShift} && passthrough(state.D, U)
+    
+    turnover(U, state.Ct[i+1], state.Ct[i],  Val{:left})
+    turnover(U, state.B[i], state.B[i+1],    Val{:left})
+
+    
+end
+
+function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St, Val{:HasPencil}, Tw}, ::Type{Val{:right}})
+
+    i = idx(U)
+
+    # we pass Ut -> W; not W^{-1} <- U
+    copy!(state.Ut, U')
+    
+    St == Val{:SingleShift} && passthrough(state.D1, state.Ut)
+    turnover(state.Ut, state.Ct1[i+1], state.Ct1[i], Val{:left})
+    turnover(state.Ut, state.B1[i], state.B1[i+1], Val{:left})
+
+    copy!(U, state.Ut')    
+
+    # through V
+    turnover(state.B[i], state.B[i+1], U, Val{:right})
+    turnover(state.Ct[i+1], state.Ct[i], U, Val{:right})
+
+    St == Val{:SingleShift} && passthrough(state.D, U)
+
+end
+
+function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St, Val{:HasPencil}, Tw}, ::Type{Val{:left}})
+
+    i = idx(U)
+
+    # through V
+    St == Val{:SingleShift} && passthrough(state.D, U)
+    turnover(state.Ct[i+1], state.Ct[i], U, Val{:right})
+    turnover(state.B[i], state.B[i+1], U, Val{:right})
+
+    # through W^{-1}
+
+    copy!(state.Ut, U')
+    
+    turnover(state.B1[i], state.B1[i+1], state.Ut, Val{:right})
+    turnover(state.Ct1[i+1], state.Ct1[i], state.Ut, Val{:right})
+    St == Val{:SingleShift} && passthrough(state.D1, state.Ut)
+    copy!(U, state.Ut')    
+    
+end
+
+
+
+##################################################
+## passthrough Q
+##
+## we have Q D U or (W,Q) V U to pass through
+## This depends on Twisted but not pencil
+##
+## If we update indices and use a unitary transform, return false (not absorbed)
+## else return true (was absorved)
+function passthrough_Q{T,P}(state::FactorizationType{T, Val{:SingleShift}, P, Val{:NotTwisted}})
+    
+    i = idx(state.U)
+
+    if i < state.ctrs.stop_index
+        turnover(state.Q[i], state.Q[i+1], state.U)
+        false
     else
-        
-        flag = diagonal_block(state, state.ctrs.stop_index+1)
-        if state.ray
-            e1, e2 = eigen_values(state)
-            shift = norm(state.A[2,2] - e1) < norm(state.A[2,2] - e2) ? e1 : e2
-        else
-            shift = state.A[2,2]
-        end
-        
+        alpha = fuse(state.Q[i], state.U, Val{:left})
+        state.D[i] *= alpha
+        state.D[i+1] *= conj(alpha)
+        true
     end
-
-    flag = diagonal_block(state, state.ctrs.start_index+1)
-    c,s,nrm = givensrot(state.A[1,1] - shift, state.A[2,1])
-
-    vals!(state.U, conj(c), -s) # U is the inverse of what we just found, 
-    idx!(state.U, state.ctrs.start_index)
-    vals!(state.Ut, c, s)
-    idx!(state.Ut, idx(state.U))
-    nothing
 end
+
+
+
+function passthrough_Q{T,P}(state::FactorizationType{T, Val{:DoubleShift}, P, Val{:NotTwisted}})
+    
+    i = idx(state.U); j = i + 1
+    
+    if j < state.ctrs.stop_index
+        turnover(state.Q[j], state.Q[j+1], state.V)
+        turnover(state.Q[i], state.Q[i+1], state.U)
+        turnover(state.W, state.V, state.U, Val{:left})
+        false
+    else
+        p = getd(state.Q[j+1])
+        dflip(state.V, p)
+        fuse(state.Q[j], state.V, Val{:left})
+
+        # now turnover U, merge with W, unitary over, pass through, and fuse
+        turnover(state.Q[i], state.Q[i+1], state.U)
+        i += 1 # after turnover, U moves down
+        fuse(state.W, state.U, Val{:right})
         
-  
+        # pass U through triangle (Wait, this need abstracting XXX for pencil case)
+        AMVW._passthrough_triu(state.U, state, Val{:right})
+#        turnover(state.B[i], state.B[i+1], state.U, Val{:right})
+#        turnover(state.Ct[i+1], state.Ct[i], state.U, Val{:right})
 
-##
-##    D        D           D
-## U'    Q -->   V Q -->     (VQ) 
-##
-## with D = D(alpha); U' = (u1, v1); V = (u1 conj(alpha), v1)
-function prepare_bulge{T}(state::ComplexComplexSingleShift{T})
-    i = idx(state.Ut)
-    if i > 1
-        # if previously deflated, the prior is only diagonal
-        # so may have trouble passing Ut to Q[i]
-        Dflip(state.Ut, state.Q[i-1])
+        dflip(state.U, p)
+        fuse(state.Q[i], state.U, Val{:left})
+        
+        true
     end
-    fuse(state.Ut, state.Q[i], Val{:right})
-end       
-
-##
-function one_bulge_chase_shortcut{T}(state::ComplexComplexSingleShift{T})
-    ## XXX speed up goes here, as we only need turnover through B, not C
-    ## savings are one fewer turnover, a few copies
-    one_bulge_chase(state)
 end
-# Moving QCBU_i -> QC(BUi) -> QCUi1B -> Q(CUi1)B -> QUiCB -> Ui1 Q C B
-function one_bulge_chase{T}(state::ComplexComplexSingleShift{T})
-    i = idx(state.U)
-    turnover(state.B[i],    state.B[i+1], state.U, Val{:right})
-    turnover(state.Ct[i+1], state.Ct[i],  state.U, Val{:right})
-    turnover(state.Q[i],    state.Q[i+1], state.U, Val{:right})    
-end
-
-# Q Ct B D U -> Q Ct B (D U) -> Q Ct (B U) D -> Q (Ct U) B D ->
-# (Q U) Ct B D -> U Q Ct B D  then wrap via unitary operation
-function chase_bulge{T}(state::ComplexComplexSingleShift{T})
-
-    # one step
-    i = idx(state.U)
-
-    ## When  i < tr  C_i = B_i. This happens in the early steps
-    ## this means fewer turnovers, but at a price of more allocations
-    while i < state.ctrs.stop_index # loops from start_index to stop_index - 1
-        if i <= state.ctrs.tr
-            one_bulge_chase_shortcut(state) 
-        else
-            one_bulge_chase(state)
-        end
-
-        i += 1
-
-    end
-
-end
-
-# We have Q Ct B D U -> Q Ct B (U D) -> Q Ct (B U) D -> Q (Ct U) B D ->
-# (Q U) Ct B D -> Q Di Ct B D -> Q (Di Ct) B D -> Q Ct (Di B) D -> Q Ct B (Di D)
-# Q CB(Ui) -> QUi C B -> (QUi
-#  I
-function absorb_bulge{T}(state::ComplexComplexSingleShift{T})
-    i = idx(state.U)
-
-    turnover(state.B[i],    state.B[i+1], state.U, Val{:right})
-    turnover(state.Ct[i+1], state.Ct[i],  state.U, Val{:right})
-    i < state.N && Dflip(state.U, state.Q[i+1])
-    fuse(state.Q[i], state.U, Val{:left})
-end
-
-##################################################
 
