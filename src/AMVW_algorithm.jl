@@ -78,18 +78,40 @@ end
 
 ## We decompose ps into qs or vs, ws for pencil
 ## caller might look like
-function basic_decompose(ps)
+function basic_decompose{T}(ps::Vector{T})
 #    ps, k = deflate_leading_zeros(ps)  ## ASSUMED
-    qs = reverse_poly(ps)
+    qs = ps[1:end-1] / ps[end]
+    par = iseven(length(qs)) ? one(T) : -one(T)
+    qs = vcat(-qs[2:end], par*qs[1], -par * one(T))
+    qs
+end
+
+function basic_decompose1(ps)
+#    ps, k = deflate_leading_zeros(ps)  ## ASSUMED
+    qs = reverse_poly(ps)  #
+    qs
+end
+
+
+function basic_decompose_1(ps)
+    #    ps, k = deflate_leading_zeros(ps)  ## ASSUMED
+    qs = ps[1:end-1] / ps[end]
+    head = shift!(qs)
+    push!(qs, head)
     qs
 end
 
 function basic_decompose_pencil{T}(ps::Vector{T})
     N = length(ps)-1
-    qs = zeros(T, N)
+    qs = zeros(T, N+1)
     qs[N]  = ps[end]
-    ps = -ps[1:N]
+    qs[N+1] = -one(T)
+
+    par = iseven(N) ? one(T) : -one(T)
+    ps = vcat(-ps[2:end-1], par * ps[1], -par*one(T))
+
     ps, qs
+    
 end
 
 ## for real like 8e-6 * N^2 run time

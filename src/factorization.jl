@@ -1,76 +1,145 @@
-## Factor R into Ct, B, Dn terms
-# R = 1 0 0 -v2 0
-#     0 1 0 -v3 0
-#     0 0 1 -v1 1
-#     0 0 0   0 0
-# So we represent R by [v1, v2, v3]
-# factors R so that D * Ct * B = Z
-function R_factorization{T}(ps::Vector{Complex{T}}, Ct, B, beta=one(T))
-    N = length(ps)
-    par = iseven(N) ? one(Complex{T}) : -one(Complex{T})
+# ## Factor R into Ct, B, Dn terms
+# # R = 1 0 0 -v2 0
+# #     0 1 0 -v3 0
+# #     0 0 1 -v1 1
+# #     0 0 0   0 0
+# # So we represent R by [v1, v2, v3]
+# # factors R so that D * Ct * B = Z
+# function R1_factorization{T}(ps::Vector{Complex{T}}, Ct, B, beta=one(T))
+#     N = length(ps)
+#     par = iseven(N) ? one(Complex{T}) : -one(Complex{T})
     
-    ## Working, but not quite what is in DFCC code
-    ## there -par*ps[N], par*one(T); C is -conj(c), -s
-    ## B[N] = par, -par...
-    ## Here we use: C' * B * D = Z (and not D C' B = Z)
-    c, s, temp = givensrot(par * conj(ps[N]), -par * one(Complex{T}))
+#     ## Working, but not quite what is in DFCC code
+#     ## there -par*ps[N], par*one(T); C is -conj(c), -s
+#     ## B[N] = par, -par...
+#     ## Here we use: C' * B * D = Z (and not D C' B = Z)
+#     c, s, temp = givensrot(par * conj(ps[N]), -par * one(Complex{T}))
+
+#     nrm = norm(c)
+#     alpha = c/nrm
+
+#     println("Diagonal: alpha=$alpha, beta=$beta")
+    
+#     alpha = alpha * beta
+    
+#     vals!(Ct[N], conj(c), -s);
+#     idx!(Ct[N], N)
+
+#     #    vals!(B[N], -par*s, par*conj(c))
+#     # B * Dn * Dn'
+#     vals!(B[N], -par*s*alpha, par*norm(c))
+#     idx!(B[N], N)
+    
+#     for ii in 2:N
+#         c, s, temp = givensrot(-ps[ii-1], temp)
+#         vals!(Ct[N-ii + 1], conj(c*alpha), -s)
+#         idx!(Ct[N-ii+1], N-ii+1)
+        
+#         vals!(B[N-ii + 1], c*alpha, s)
+#         idx!(B[N-ii+1], N-ii+1)
+#     end
+
+#     alpha
+# end
+
+# ## No D passed, we do a Ct * B factorization without a rotation to keep Complex Real
+# ## this can be Real/Real or Complex/Complex
+# function R1_factorization{T <: Real}(ps::Vector{T}, Ct, B)
+#     N = length(ps)
+#     par = iseven(N) ? one(T) : -one(T)
+    
+#     ## Working, but not quite what is in DFCC code
+#     ## there -par*ps[N], par*one(T); C is -conj(c), -s
+#     ## B[N] = par, -par...
+#     ## Here we use: C' * B * D = Z (and not D C' B = Z)
+#     c, s, temp = givensrot(par * ps[N], -par * one(T))
+
+    
+#     vals!(Ct[N], c, -s);
+#     idx!(Ct[N], N)
+
+#     #    vals!(B[N], -par*s, par*conj(c))
+#     # B * Dn * Dn'
+#     vals!(B[N], -par * s, par * c)
+#     idx!(B[N], N)
+    
+#     for ii in 2:N
+#         c, s, temp = givensrot(-ps[ii-1], temp)
+#         vals!(Ct[N-ii + 1], c, -s)
+#         idx!(Ct[N-ii+1], N-ii+1)
+        
+#         vals!(B[N-ii + 1], c, s)
+#         idx!(B[N-ii+1], N-ii+1)
+#     end
+
+#     one(T) # alpha
+# end
+
+## Factor
+##
+##  1 0 -p1                   1 0 0 0 0       -p1
+##  0 1 -p2  --> Yn + X -->   0 1 0 0 0       -p2
+##  0 0 -p3                   0 0 1 0 -1  +   -p3
+##                            0 0 0 1 0       - 1
+## we pass in ps = [-p1, -p2, ..., -pn, -1] the whol column including 1
+## We can leave as Ct * B * D or D * Ct * B (the defaul)
+function R_factorization{T}(ps::Vector{Complex{T}}, Ct, B, side=Val{:left})
+
+    N = length(ps) - 1 # ps has 1 in it?
+    c,s,tmp = givensrot(conj(ps[N]), -one(Complex{T}))
 
     nrm = norm(c)
     alpha = c/nrm
-    alpha = alpha * beta
+    
+    alpha = alpha
     
     vals!(Ct[N], conj(c), -s);
     idx!(Ct[N], N)
-
-    #    vals!(B[N], -par*s, par*conj(c))
-    # B * Dn * Dn'
-    vals!(B[N], -par*s*alpha, par*norm(c))
-    idx!(B[N], N)
     
-    for ii in 2:N
-        c, s, temp = givensrot(-ps[ii-1], temp)
-        vals!(Ct[N-ii + 1], conj(c*alpha), -s)
-        idx!(Ct[N-ii+1], N-ii+1)
-        
-        vals!(B[N-ii + 1], c*alpha, s)
-        idx!(B[N-ii+1], N-ii+1)
+    vals!(B[N], -s*alpha, norm(c))
+    idx!(B[N], N)
+
+    ## do we leave on left? If so, it must pass through Cts and B
+    gamma = side == Val{:left} ? alpha : one(Complex{T})
+
+    for i in (N-1):-1:1
+        c,s,tmp = givensrot(ps[i], tmp)
+        vals!(Ct[i], conj(c*gamma), -s)
+        idx!(Ct[i], i)
+
+        vals!(B[i], c*gamma, s)
+        idx!(B[i], i)
     end
 
-    alpha
+    side == Val{:left} ? alpha : conj(alpha)
 end
 
-## No D passed, we do a Ct * B factorization without a rotation to keep Complex Real
-## this can be Real/Real or Complex/Complex
-function R_factorization{T <: Real}(ps::Vector{T}, Ct, B)
-    N = length(ps)
-    par = iseven(N) ? one(T) : -one(T)
-    
-    ## Working, but not quite what is in DFCC code
-    ## there -par*ps[N], par*one(T); C is -conj(c), -s
-    ## B[N] = par, -par...
-    ## Here we use: C' * B * D = Z (and not D C' B = Z)
-    c, s, temp = givensrot(par * ps[N], -par * one(T))
 
-    
+## Factor R =
+# 1 0 0 p1     1 0 0 0       p1
+# 0 1 0 p2 --> 0 1 0 0  -->  p2
+# 0 0 1 p3     0 0 0 -1      p3
+#              0 0 1 0       -1
+function R_factorization{T <: Real}(ps::Vector{T}, Ct, B, side=Val{:not_applicable})
+    N = length(ps) - 1
+    c,s,tmp = givensrot(ps[N], - one(T))
+
     vals!(Ct[N], c, -s);
     idx!(Ct[N], N)
-
-    #    vals!(B[N], -par*s, par*conj(c))
-    # B * Dn * Dn'
-    vals!(B[N], -par * s, par * c)
+    vals!(B[N], -s, c)
     idx!(B[N], N)
     
-    for ii in 2:N
-        c, s, temp = givensrot(-ps[ii-1], temp)
-        vals!(Ct[N-ii + 1], c, -s)
-        idx!(Ct[N-ii+1], N-ii+1)
-        
-        vals!(B[N-ii + 1], c, s)
-        idx!(B[N-ii+1], N-ii+1)
-    end
+   
+    for i in (N-1):-1:1
+        c,s,tmp = givensrot(ps[i], tmp)
+        vals!(Ct[i], c, -s)
+        idx!(Ct[i], i)
 
-    one(T) # alpha
+        vals!(B[i], c, s)
+        idx!(B[i], i)
+    end
 end
+
 
 function Q_factorization{T, P}(state::FactorizationType{T, Val{:SingleShift}, P, Val{:NotTwisted}})
     N = state.N
@@ -109,21 +178,25 @@ function init_triu{T, ST, Tw}(state::FactorizationType{T, ST, Val{:NoPencil}, Tw
     # fill out Ct, B, pass back alpha
     ## We need to do something here with POLY!
     ps = decompose(state.POLY)
-    alpha =  R_factorization(ps, state.Ct, state.B)
+    #XXX    alpha =  R_factorization(ps, state.Ct, state.B)
+    
+    alpha =  R_factorization(ps, state.Ct, state.B)    
     alpha
 end
 
+# Here we have V = D Ct B; W = D1 Ct1 B1
 function init_triu{T, St, Tw}(state::FactorizationType{T, St, Val{:HasPencil}, Tw}, decompose)
-    # fill out Ct, B, pass back alpha
-    # Need to so
+
     ps, qs = decompose(state.POLY)
-    beta =  R_factorization(qs, state.Ct1i, state.B1i)
-    ## we need to reverse the qs
-    for i in eachindex(state.B1i)
-        copy!(state.Ct1i[i], state.Ct1i[i]')
-        copy!(state.B1i[i], state.B1i[i]')
+    beta =  R_factorization(qs, state.Ct1, state.B1)
+    
+    ## if SingleShift, we need to stash beta into D1:
+    if St == Val{:SingleShift}
+        state.D1[state.N] = beta
+        state.D1[state.N+1] = conj(beta)
     end
-    alpha =  R_factorization(ps, state.Ct, state.B, beta=beta)
+    
+    alpha =  R_factorization(ps, state.Ct, state.B)
     alpha
 end
 

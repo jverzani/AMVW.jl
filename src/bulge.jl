@@ -189,30 +189,51 @@ end
 
 ## pass a specified U through
 function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St, Val{:NoPencil}, Tw}, ::Type{Val{:right}})
+
     i = idx(U)
+
     turnover(state.B[i], state.B[i+1], U, Val{:right})
     turnover(state.Ct[i+1], state.Ct[i], U, Val{:right})
+    
+    St == Val{:SingleShift} && passthrough(state.D, U)
+    
 end
+
 function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St, Val{:NoPencil}, Tw}, ::Type{Val{:left}})
+
     i = idx(U)
+
+    St == Val{:SingleShift} && passthrough(state.D, U)
+    
     turnover(U, state.Ct[i+1], state.Ct[i],  Val{:left})
     turnover(U, state.B[i], state.B[i+1],    Val{:left})
+
+    
 end
 
-function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St, Val{:HasPencil}, Tw}, ::Type{Val{:right}})i
+function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St, Val{:HasPencil}, Tw}, ::Type{Val{:right}})
+
     i = idx(U)
 
+    # we pass Ut -> W; not W^{-1} <- U
     copy!(state.Ut, U')
-    turnover(Ut, state.B1i[i+1], state.B1i[i], Val{:left})
-    turnover(Ut, state.Ct1[i], state.Ct1[i+1], Val{:left})
-    copy!(U, state.Ut')
     
+    St == Val{:SingleShift} && passthrough(state.D1, state.Ut)
+    turnover(state.Ut, state.Ct1[i+1], state.Ct1[i], Val{:left})
+    turnover(state.Ut, state.B1[i], state.B1[i+1], Val{:left})
+
+    copy!(U, state.Ut')    
+
+    # through V
     turnover(state.B[i], state.B[i+1], U, Val{:right})
     turnover(state.Ct[i+1], state.Ct[i], U, Val{:right})
+
+    St == Val{:SingleShift} && passthrough(state.D, U)
+
 end
 
 function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St, Val{:HasPencil}, Tw}, ::Type{Val{:left}})
-    
+    println("XXX needs work XXX")
     i = idx(U)
 
     turnover(U, state.Ct[i+1], state.Ct[i],  Val{:left})
@@ -220,12 +241,27 @@ function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St
 
 
     copy!(state.Ut, U')
+
+    St == Val{:Singleshift} && passthrough(state.D1u, Ut)
+    
     Bpti, Bpti1 = state.Bp[i]', state.Bp[i+1]'
     Cpti, Cpti1 = state.Ctp[i]', state.Ctp[i+1]'
 
     turnover(state.Ct1i[i], state.Ct1i[i+1], Ut, Val{:right})
     turnover(state.B1i[i+1], state.B1i[i], Ut, Val{:right})
 
+    # XXXSt == Val{:Singleshift} && passthrough(state.D1u, Ut)
+    #    passthrough(view(D, i:i+1), state.U) # view will allocate
+
+    # state.Dp[1], state.Dp[2] = state.D[i], state.D[i+1]
+    # passthrough(state.Dp, state.U)
+    # state.D[i],state.D[i+1] = state.Dp[1], state.Dp[2]    
+
+    # D = state.D[idx(Ut):idx(Ut)+1]
+    # passthrough(D, Ut)
+    # state.D1i[idx(Ut):idx(Ut)+1] *= D
+    
+    
     copy!(U, state.Ut')
     
 end
@@ -238,14 +274,14 @@ passthrough_triu(state::FactorizationType) = passthrough_triu(state, Val{:right}
 
 # no pencil case first
 # dir is Val{:right} [default] or Val{:left}
-function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:SingleShift}, Val{:NoPencil}, Tw}, dir)
+function passthrough_triu{T, P, Tw}(state::FactorizationType{T, Val{:SingleShift}, P, Tw}, dir)
     _passthrough_triu(state.U, state, dir)
 end
 
 
 ## For double shift we have V then U
 ## XXX can speed this up via `tr` trick!
-function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:DoubleShift}, Val{:NoPencil}, Tw}, ::Type{Val{:right}})
+function passthrough_triu{T, P, Tw}(state::FactorizationType{T, Val{:DoubleShift}, P, Tw}, ::Type{Val{:right}})
     _passthrough_triu(state.V, state, Val{:right})
     _passthrough_triu(state.U, state, Val{:right})    
 end
@@ -255,17 +291,18 @@ function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:DoubleShift}, 
     _passthrough_triu(state.V, state, Val{:left})
 end
 
-function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:SingleShift}, Val{:HasPencil}, Tw}, ::Type{Val{:right}})
-end
+#function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:SingleShift}, Val{:HasPencil}, Tw}, ::Type{Val{:right}})#
+#
+#end
 
-function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:SingleShift}, Val{:HasPencil}, Tw}, ::Type{Val{:left}})
-end
+# function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:SingleShift}, Val{:HasPencil}, Tw}, ::Type{Val{:left}})
+# end
 
-function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:DoubleShift}, Val{:HasPencil}, Tw}, ::Type{Val{:right}})
-end
+# function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:DoubleShift}, Val{:HasPencil}, Tw}, ::Type{Val{:right}})
+# end
 
-function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:DoubleShift}, Val{:HasPencil}, Tw}, ::Type{Val{:left}})
-end
+# function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:DoubleShift}, Val{:HasPencil}, Tw}, ::Type{Val{:left}})
+# end
 
 
 
@@ -280,10 +317,6 @@ end
 function passthrough_Q{T,P}(state::FactorizationType{T, Val{:SingleShift}, P, Val{:NotTwisted}})
     
     i = idx(state.U)
-#    passthrough(view(D, i:i+1), state.U) # view will allocate
-    state.Dp[1], state.Dp[2] = state.D[i], state.D[i+1]
-    passthrough(state.Dp, state.U)
-    state.D[i],state.D[i+1] = state.Dp[1], state.Dp[2]    
 
     if i < state.ctrs.stop_index
         turnover(state.Q[i], state.Q[i+1], state.U)
@@ -318,8 +351,9 @@ function passthrough_Q{T,P}(state::FactorizationType{T, Val{:DoubleShift}, P, Va
         fuse(state.W, state.U, Val{:right})
         
         # pass U through triangle (Wait, this need abstracting XXX for pencil case)
-        turnover(state.B[i], state.B[i+1], state.U, Val{:right})
-        turnover(state.Ct[i+1], state.Ct[i], state.U, Val{:right})
+        AMVW._passthrough_triu(state.U, state, Val{:right})
+#        turnover(state.B[i], state.B[i+1], state.U, Val{:right})
+#        turnover(state.Ct[i+1], state.Ct[i], state.U, Val{:right})
 
         dflip(state.U, p)
         fuse(state.Q[i], state.U, Val{:left})

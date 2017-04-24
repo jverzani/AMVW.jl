@@ -182,7 +182,7 @@ end
 
 function _turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T})    
 #    i,j,k = idx(Q1), idx(Q2), idx(Q3)
-#    (i == k) || error("Need to have a turnover up down up or down up down: have i=$#i, j=$j, k=$k")
+#    (i == k) || error("Need to have a turnover up down up or down up down: have i=$i, j=$j, k=$k")
 #    abs(j-i) == 1 || error("Need to have |i-j| == 1")
     
     c1,s1 = vals(Q1)
@@ -262,13 +262,14 @@ end
 ## Here D[i] = D[1]
 ## usually call with view(state.d, idx(U):idx(U)+1)
 function passthrough{T}(D, U::ComplexRealRotator{T})
-    alpha, beta = D[1], D[2]
+    i = idx(U)
+    alpha, beta = D[i], D[i+1]
 
     c, s = vals(U)
     u = c * alpha * conj(beta)
     v = s
     vals!(U, u, v)
-    D[1], D[2] = beta, alpha
+    D[i], D[i+1] = beta, alpha
 end
 
 function passthrough{T}(D::ComplexRealRotator{T}, U::ComplexRealRotator{T})

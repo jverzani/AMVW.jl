@@ -86,162 +86,116 @@
 # precision for, say, Wilknson(20)
 #
 
-function diagonal_block{T, St, Tw}(state::FactorizationType{T, St, Val{:NoPencil}, Tw}, k)
-    k >= 2 && k <= state.N || error("$k not in [2,n]")
+# R = Ct* B
+# This finds R[(k-2):k,(k-1):k] from C and B,
+# If D is necessary, it must be done separately
+# Here k-2 <= j <= k
+function Rjk(Ct, B, j, k)
+    delta = k -j
+    delta < 0 && return 0
+    0 <= delta <= 2 || error("k-j in 0,1,2")
 
-    A = state.A 
-    R = state.R # temp storage
-
-    Q,Ct,B = state.Q, state.Ct, state.B
-    
-    if k == 2
-        Bj_c, Bj_s = vals(B[k-1]);  Bk_c, Bk_s = vals(B[k])
-        Cj_c, Cj_s = vals(Ct[k-1]); Ck_c, Ck_s = vals(Ct[k])
-        Qj_c, Qj_s = vals(Q[k-1]);  Qk_c, Qk_s = vals(Q[k])
-
-        
-        # # here we only need [r11 r12; 0 r22]
-        # k=2 this is r_kk, r_k-1,k
-
-        # for k
-        wl =  Bk_s
-        wk =  conj(Bj_c) * Bk_c
-
+    if delta == 0 # (k,k) case is easiest
         # rkk = -w_{k+1} / ck_s
-        R[2,2] = - wl / Ck_s
-        
+        wl = B[k].s
+        return -wl / Ct[k].s
+    elseif delta == 1
+        j = k-1
         # r_{k-1,k} =  -(wk + cj_c * conj(ck_c) / ck_s *wl)/cj_s
-        R[1,2] = - (wk + Cj_c * conj(Ck_c) / Ck_s * wl) / Cj_s
-
-        # for k - 1 we have (l=k)
-        wl = Bj_s
-        R[1,1] = - wl / Cj_s
-        R[2,1] = complex(zero(T))
-
-#        alpha, beta = getD(state, k-1), getD(state, k)
-#        R[1,1] *= alpha; R[1,2] *= alpha
-#        R[2,1] *= beta; R[2,2] *= beta
-
-
-
-        # rotate by Q, D
-        compute_QR(state, R, k)
-        
-        # A[1,1] = R[1,1] * Qj_c
-        # A[2,1] = R[1,1] * Qj_s
-        # A[1,2] = R[1,2] * Qj_c - R[2,2] * Qk_c * conj(Qj_s)
-        # A[2,2] = R[1,2] * Qj_s + R[2,2] * Qk_c * conj(Qj_c)
-
+        wl = B[k].s
+        wk = conj(B[j].c) * B[k].c
+        return -(wk + Ct[j].c * conj(Ct[k].c) / Ct[k].s * wl) / Ct[j].s
     else
-        
-        Bi_c, Bi_s = vals(B[k-2]);  Bj_c, Bj_s = vals(B[k-1]);  Bk_c, Bk_s = vals(B[k])
-        Ci_c, Ci_s = vals(Ct[k-2]); Cj_c, Cj_s = vals(Ct[k-1]); Ck_c, Ck_s = vals(Ct[k])
-        Qi_c, Qi_s = vals(Q[k-2]);  Qj_c, Qj_s = vals(Q[k-1]);  Qk_c, Qk_s = vals(Q[k])
-
-        
-        # for k
-        wl =   Bk_s
-        wk =  conj(Bj_c) * Bk_c
-        wj = - conj(Bi_c) * conj(Bj_s) * Bk_c
-        
-        R[3,2] = - wl / Ck_s
-        R[2,2] = - (wk + Cj_c * conj(Ck_c) / Ck_s * wl) / Cj_s
-        
+        i,j = k-2, k-1
+        wl = B[k].s
+        wk = conj(B[j].c) * B[k].c
+        wj = - conj(B[i].c) * conj(B[j].s) * B[k].c
         # -(wj + ci_c * conj(cj_c) / cj_s * wk + ci_c * conj(ck_c) / (cj_s * ck_s) * wl)/ci_s
-        R[1,2] = -(wj + Ci_c * conj(Cj_c) / Cj_s * wk +
-                   Ci_c * conj(Ck_c) / (Cj_s * Ck_s) * wl) / Ci_s
-
-        # downshift C indexes l->k; k->j; j->i; but keep w's (confusing)
-        wl =  Bj_s
-        wk =  conj(Bi_c) * Bj_c
-        R[2,1] = - wl / Cj_s
-        R[1,1] = - (wk + Ci_c * conj(Cj_c) / Cj_s * wl) / Ci_s
-        R[3,1] = zero(T)
-
-        compute_QR(state, R, k)
-        
+        return -(wj + Ct[i].c * conj(Ct[j].c) / Ct[j].s * wk +
+                 Ct[i].c * conj(Ct[k].c) / (Ct[j].s * Ct[k].s) * wl) / Ct[i].s
     end
-
-    false 
 end
 
 
-## Has pencil!!
-function diagonal_block{T, St, Tw}(state::FactorizationType{T, St, Val{:HasPencil}, Tw}, k)
+# Simple type to help with getting elements of R
+abstract type RType end
+type RTypeDouble <: RType
+    Ct
+    B
+end
+type RTypeSingle <: RType
+    Ct
+    B
+    D
+end
+
+Base.getindex(a::RTypeDouble, j, k) = Rjk(a.Ct, a.B, j, k)
+Base.getindex(a::RTypeSingle, j, k) = a.D[j] * Rjk(a.Ct, a.B, j, k)
+
+function diagonal_block{T, St, Tw}(state::FactorizationType{T, St, Val{:NoPencil}, Tw}, k)
     k >= 2 && k <= state.N || error("$k not in [2,n]")
 
-    A = state.A 
     R = state.R # temp storage
 
     Q,Ct,B = state.Q, state.Ct, state.B
     
+    V = St == Val{:SingleShift} ? RTypeSingle(state.Ct, state.B, state.D) : RTypeDouble(state.Ct, state.B)
+    
     if k == 2
-        Bj_c, Bj_s = vals(B[k-1]);  Bk_c, Bk_s = vals(B[k])
-        Cj_c, Cj_s = vals(Ct[k-1]); Ck_c, Ck_s = vals(Ct[k])
-        Qj_c, Qj_s = vals(Q[k-1]);  Qk_c, Qk_s = vals(Q[k])
+        for i in 1:2, j in 1:2
+            R[i,j] = V[i,j]
+        end
+    else
+        for i in 1:3, j in 1:2
+            R[i,j] = V[k - 3 + i, k - 2 + j]
+        end
+    end
 
-        
-        # # here we only need [r11 r12; 0 r22]
-        # k=2 this is r_kk, r_k-1,k
+    compute_QR(state, R, k)
 
-        # for k
-        wl =  Bk_s
-        wk =  conj(Bj_c) * Bk_c
+    false 
+end
+## Has pencil!!
 
-        # rkk = -w_{k+1} / ck_s
-        R[2,2] = - wl / Ck_s
-        
-        # r_{k-1,k} =  -(wk + cj_c * conj(ck_c) / ck_s *wl)/cj_s
-        R[1,2] = - (wk + Cj_c * conj(Ck_c) / Ck_s * wl) / Cj_s
-
-        # for k - 1 we have (l=k)
-        wl = Bj_s
-        R[1,1] = - wl / Cj_s
-        R[2,1] = complex(zero(T))
-
-#        alpha, beta = getD(state, k-1), getD(state, k)
-#        R[1,1] *= alpha; R[1,2] *= alpha
-#        R[2,1] *= beta; R[2,2] *= beta
+# julia> s = VWi[2:4, 3:4]
+# 3×2 Array{SymPy.Sym,2}:
+#  v23/W33 - W23*v22/(W22*W33)  v24/W44 - W34*v23/(W33*W44) + v22*(W23*W34/(W33*W44) - W24/W44)/W22
+#                      v33/W33                                          v34/W44 - W34*v33/(W33*W44)
+#                            0                                                              v44/W44
 
 
+function diagonal_block{T, St, Tw}(state::FactorizationType{T, St, Val{:HasPencil}, Tw}, k)
 
-        # rotate by Q, D
-        compute_QR(state, R, k)
-        
-        # A[1,1] = R[1,1] * Qj_c
-        # A[2,1] = R[1,1] * Qj_s
-        # A[1,2] = R[1,2] * Qj_c - R[2,2] * Qk_c * conj(Qj_s)
-        # A[2,2] = R[1,2] * Qj_s + R[2,2] * Qk_c * conj(Qj_c)
+    k >= 2 && k <= state.N || error("$k not in [2,n]")
+
+    R = state.R # temp storage
+
+    W = St == Val{:SingleShift} ? RTypeSingle(state.Ct1, state.B1, state.D1) : RTypeDouble(state.Ct1, state.B1)    
+    V = St == Val{:SingleShift} ? RTypeSingle(state.Ct, state.B, state.D) : RTypeDouble(state.Ct, state.B)
+
+
+
+    if k == 2
+        j = k - 1
+        R[1,1] = V[j,j] / W[j,j]
+        R[1,2] = V[j,k]/W[k,k] - W[j,k]*V[j,j] / (W[j,j]*W[k,k])
+        R[2,1] = zero(T)
+        R[2,2] = V[k,k] / W[k,k]
 
     else
         
-        Bi_c, Bi_s = vals(B[k-2]);  Bj_c, Bj_s = vals(B[k-1]);  Bk_c, Bk_s = vals(B[k])
-        Ci_c, Ci_s = vals(Ct[k-2]); Cj_c, Cj_s = vals(Ct[k-1]); Ck_c, Ck_s = vals(Ct[k])
-        Qi_c, Qi_s = vals(Q[k-2]);  Qj_c, Qj_s = vals(Q[k-1]);  Qk_c, Qk_s = vals(Q[k])
-
-        
-        # for k
-        wl =   Bk_s
-        wk =  conj(Bj_c) * Bk_c
-        wj = - conj(Bi_c) * conj(Bj_s) * Bk_c
-        
-        R[3,2] = - wl / Ck_s
-        R[2,2] = - (wk + Cj_c * conj(Ck_c) / Ck_s * wl) / Cj_s
-        
-        # -(wj + ci_c * conj(cj_c) / cj_s * wk + ci_c * conj(ck_c) / (cj_s * ck_s) * wl)/ci_s
-        R[1,2] = -(wj + Ci_c * conj(Cj_c) / Cj_s * wk +
-                   Ci_c * conj(Ck_c) / (Cj_s * Ck_s) * wl) / Ci_s
-
-        # downshift C indexes l->k; k->j; j->i; but keep w's (confusing)
-        wl =  Bj_s
-        wk =  conj(Bi_c) * Bj_c
-        R[2,1] = - wl / Cj_s
-        R[1,1] = - (wk + Ci_c * conj(Cj_c) / Cj_s * wl) / Ci_s
+        i,j = k-2, k-1
+        R[1,1] = V[i,j]/W[j,j] - W[i,j] * V[i,i] / (W[i,i]*W[j,j])
+        R[1,2] = V[i,k]/W[k,k] - W[j,k] * V[i,j] / (W[j,j]*W[k,k]) + V[i,i] *(W[i,j]*W[j,k]/(W[i,i]*W[j,j]) - W[i,k]/W[k,k])/W[i,i]
+        R[2,1] = V[j,j] / W[j,j]
+        R[2,2] = V[j,k]/W[k,k] - W[j,k]*V[j,j] - W[j,k]*V[j,j] / (W[i,i]*W[j,j])
         R[3,1] = zero(T)
+        R[3,2] = V[k,k] / W[k,k]
+    end        
 
-        compute_QR(state, R, k)
+    # rotate by Q
+    compute_QR(state, R, k)
         
-    end
 
     false 
 end
@@ -261,12 +215,7 @@ function compute_QR{T,St, P}(state::FactorizationType{T, St, P, Val{:NotTwisted}
     Q = state.Q
 
     if k == 2
-        # pass through D
-        alpha, beta = getD(state, k-1), getD(state, k)
-        R[1,1] *= alpha; R[1,2] *= alpha
-        R[2,1] *= beta; R[2,2] *= beta
-        
-        
+       
 # 3×2 Array{SymPy.Sym,2}
 # ⎡                           ___⎤
 # ⎢R₁₁⋅qjc  R₁₂⋅qjc - R₂₂⋅qkc⋅qjs⎥
@@ -284,11 +233,7 @@ function compute_QR{T,St, P}(state::FactorizationType{T, St, P, Val{:NotTwisted}
         A[1,2] = R[1,2] * Qj_c - R[2,2] * Qk_c * conj(Qj_s)
         A[2,2] = R[1,2] * Qj_s + R[2,2] * Qk_c * conj(Qj_c)
     else
-        ## pass through D if necessary (SingleShift case)
-        alpha, beta, gamma = getD(state, k-2), getD(state, k-1), getD(state, k)
-        R[1,1] *= alpha; R[1,2] *= alpha
-        R[2,1] *= beta;  R[2,2] *= beta
-        R[3,1] *= gamma; R[3,2] *= gamma
+     
 
 
 # make Qs from multiplying rotators
