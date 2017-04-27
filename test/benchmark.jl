@@ -52,15 +52,14 @@ p = poly(rs)
 #   memory tolerance: 1.00%
 
 @benchmark AMVW.poly_roots(p.a)
-# julia> @benchmark AMVW.poly_roots(p.a)
 # BenchmarkTools.Trial: 
-#   memory estimate:  4.27 KiB
-#   allocs estimate:  66
+#   memory estimate:  3.33 KiB
+#   allocs estimate:  59
 #   --------------
-#   minimum time:     93.309 μs (0.00% GC)
-#   median time:      150.606 μs (0.00% GC)
-#   mean time:        155.830 μs (0.26% GC)
-#   maximum time:     4.237 ms (94.03% GC)
+#   minimum time:     141.058 μs (0.00% GC)
+#   median time:      151.329 μs (0.00% GC)
+#   mean time:        157.192 μs (0.24% GC)
+#   maximum time:     4.077 ms (93.81% GC)
 #   --------------
 #   samples:          10000
 #   evals/sample:     1
@@ -109,6 +108,22 @@ p = poly(rs)
 #   memory tolerance: 1.00%
 
 @benchmark AMVW.poly_roots(p.a)
+# we now seem to get extra allocations with complex arithmetice, but the run time went down.
+# need to investigate
+# BenchmarkTools.Trial: 
+#   memory estimate:  19.28 KiB
+#   allocs estimate:  604
+#   --------------
+#   minimum time:     106.826 μs (0.00% GC)
+#   median time:      116.553 μs (0.00% GC)
+#   mean time:        129.810 μs (2.35% GC)
+#   maximum time:     4.494 ms (94.28% GC)
+#   --------------
+#   samples:          10000
+#   evals/sample:     1
+#   time tolerance:   5.00%
+#   memory tolerance: 1.00%
+# was
 # BenchmarkTools.Trial: 
 #   memory estimate:  4.66 KiB
 #   allocs estimate:  56
@@ -161,6 +176,23 @@ p = poly(rs)
 #   memory tolerance: 1.00%
 
 @benchmark AMVW.poly_roots(p.a) #  use state.ray=false
+## same problem with allocations with complex case
+# BenchmarkTools.Trial: 
+#   memory estimate:  34.63 KiB
+#   allocs estimate:  1117
+#   --------------
+#   minimum time:     284.197 μs (0.00% GC)
+#   median time:      308.189 μs (0.00% GC)
+#   mean time:        343.786 μs (1.51% GC)
+#   maximum time:     4.638 ms (89.81% GC)
+#   --------------
+#   samples:          10000
+#   evals/sample:     1
+#   time tolerance:   5.00%
+#   memory tolerance: 1.00%
+
+
+# was
 # ## XXX Stil misses alot
 # BenchmarkTools.Trial: 
 #   memory estimate:  5.88 KiB
@@ -204,6 +236,22 @@ p = poly(rs)
 ## Error (no support for big)
 
 @benchmark AMVW.poly_roots(p.a)
+## now a regression here in allocations, though median and mean times
+## are similar
+# BenchmarkTools.Trial: 
+#   memory estimate:  14.62 MiB
+#   allocs estimate:  295391
+#   --------------
+#   minimum time:     36.925 ms (0.00% GC)
+#   median time:      59.565 ms (33.27% GC)
+#   mean time:        54.682 ms (25.80% GC)
+#   maximum time:     67.768 ms (31.06% GC)
+#   --------------
+#   samples:          92
+#   evals/sample:     1
+#   time tolerance:   5.00%
+#   memory tolerance: 1.00%
+## was
 # julia> @benchmark AMVW.poly_roots(p.a)
 # BenchmarkTools.Trial: 
 #   memory estimate:  10.14 MiB
@@ -222,7 +270,7 @@ p = poly(rs)
 # julia> maximum(norm.(sort(AMVW.poly_roots(p.a), by=norm) - sort(rs, by=norm)))
 # 3.542606431077360733112308774961528146389295822293876354568756300943283335489686e-71
 
-@benchmark PolynomialRoots.roots(p.a) 
+@benchmark PolynomialRoots.roots(p.a)
 # BenchmarkTools.Trial: 
 #   memory estimate:  1.25 MiB
 #   allocs estimate:  26226
@@ -266,6 +314,20 @@ p = poly(rs)
 
 
 @benchmark AMVW.poly_roots(p.a)
+# BenchmarkTools.Trial: 
+#   memory estimate:  10.31 KiB
+#   allocs estimate:  179
+#   --------------
+#   minimum time:     2.429 ms (0.00% GC)
+#   median time:      2.783 ms (0.00% GC)
+#   mean time:        2.881 ms (0.00% GC)
+#   maximum time:     4.219 ms (0.00% GC)
+#   --------------
+#   samples:          1711
+#   evals/sample:     1
+#   time tolerance:   5.00%
+#   memory tolerance: 1.00%
+## was
 # julia> @benchmark AMVW.poly_roots(p.a)
 # BenchmarkTools.Trial: 
 #   memory estimate:  12.73 KiB

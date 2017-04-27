@@ -66,41 +66,20 @@ function discr{T}(a::T,b::T,c::T)
 end
 
 ##
-# solve degree 2 or less case
-## COMPLEX VALUSE XXX
-function solve_simple_cases(state)
-#    println("Simple case setting eigen value")
-    if N == 0
-        state.FLAG = -1
-        return
-    elseif N == 1
-        state.FLAG = 0
-        N == 1 && (state.REIGS[1] = -state.POLY[1])
-        return
+## solve degree 2 or less case
+function solve_simple_cases{T}(ps::Vector{T})
+    S = T <: Complex ? T : Complex{T}
+    
+    N = length(ps)
+    
+    if N <= 1
+        return S[]
     elseif N == 2
-        # quadratic formula
-        c,b,a = state.POLY[1], state.POLY[2], 1.0
-
-        tr = -b
-        disc = b^2 - 4.0*c
-
-        if disc < 0
-            state.REIGS[1] = -b/2.0
-            state.IEIGS[1] = sqrt(-disc)/2.0
-            state.REIGS[2] = state.REIGS[1]
-            state.IEIGS[2] = -state.IEIGS[1]
-        else
-            u,v = tr + sqrt(disc), tr - sqrt(disc)
-            if abs(u) < abs(v)
-                u,v = v, u
-            end
-            if u == 0
-                ## nothing to do
-            else
-                state.REIGS[1] = u/2.0
-                state.REIGS[2] = c/state.REIGS[1]
-            end
-        end
+        return S[-ps[1]/ps[2]]
+    elseif N == 3
+        c,b,a = ps
+        r1,i1, r2,i2 = quadratic_equation(a,b,c)
+        S[complex(r1, i1), complex(r2, i2)]
     end
 end
 

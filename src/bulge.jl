@@ -1,11 +1,11 @@
 ## Bulge chasing
 
-## A bulge is introduce by a unitary transformation. IN the single shift case this is just U^t A U; for
+## A bulge is introduced by a unitary transformation. In the single shift case this is just U^t A U; for
 ## the double shift case this is (VU)^T A (VU).
 ## In either case, we have three steps:
 ##
 ## * create the unitary transformations (U or (V,U)) -- create_bulge
-## * absorb the left side -- absorb Ut
+## * absorb the left side -- absorb_Ut
 ## * chase the right side down until it is absorbed -- absorb_U
 ##
 function bulge_step{T, St, P}(state::FactorizationType{T, St, P, Val{:NotTwisted}})
@@ -17,7 +17,7 @@ end
 ##################################################
 ## Create Bulge
 ## One for DoubleShift/SingleShift
-## but Pencil or Twisted shouldn't matter as they come out in diagonalblock.
+## Pencil or Twisted don't matter as they come out in diagonalblock.
 
 # ## The bulge is created by  (A-rho1) * (A - rho2) * e_1 where rho1 and rho2 are eigenvalue or random
 function create_bulge{T, P, Tw}(state::FactorizationType{T, Val{:DoubleShift}, P, Tw})
@@ -45,7 +45,6 @@ function create_bulge{T, P, Tw}(state::FactorizationType{T, Val{:DoubleShift}, P
         l2r, l2i =  state.e2
 
         # find first part of A[1:3, 1:2]
-        Bk = state.Bk 
         flag = flag | diagonal_block(state,  state.ctrs.start_index+1)
 
         bk11, bk12 = state.A[1,1], state.A[1,2]
@@ -53,7 +52,6 @@ function create_bulge{T, P, Tw}(state::FactorizationType{T, Val{:DoubleShift}, P
 
         # find last part
         flag = flag | diagonal_block(state, state.ctrs.start_index+2)
-        #        Bk[3,2] = state.A[2, 1]
         bk32 = state.A[2,1]
 
         # an issue... restart
@@ -142,7 +140,7 @@ end
 function absorb_Ut{T, P}(state::FactorizationType{T, Val{:SingleShift}, P, Val{:NotTwisted}})
     i = idx(state.Ut)
     alpha = fuse(state.Ut, state.Q[i], Val{:right})
-    cascade(state.Q, state.D, alpha, i, state.ctrs.stop_index)
+    cascade(state.Q, state.D, alpha, i, state.ctrs.stop_index) # cascade move Di into D through Qs
 end
 
 # This depends on Q
@@ -190,9 +188,9 @@ function absorb_U{T, St, P}(state::FactorizationType{T, St, P, Val{:NotTwisted}}
 end
 
 ## pass through triu
-## we one or two triangular matrices to pass through (QV or QVW^(-1)). THis passese U
+## we one or two triangular matrices to pass through (QV or QVW^(-1)). THis passes U
 ## through from right to left
-## we can also do left to right, needed with twisted factorizations
+## we also do left to right, needed with twisted factorizations
 
 
 # right to left is default
@@ -200,15 +198,28 @@ passthrough_triu(state::FactorizationType) = passthrough_triu(state, Val{:right}
 
 ## singleshift case has only one rotator to pass through
 function passthrough_triu{T, P, Tw}(state::FactorizationType{T, Val{:SingleShift}, P, Tw}, dir)
+    ## can't do case of i <= state.ctrs.tr; as we don't have Ct[i] * B[i] = I due to pulling out of alpha.
     _passthrough_triu(state.U, state, dir)
 end
 
 
 ## For double shift we have V then U
-## XXX can speed this up via `tr` trick!
 function passthrough_triu{T, P, Tw}(state::FactorizationType{T, Val{:DoubleShift}, P, Tw}, ::Type{Val{:right}})
-    _passthrough_triu(state.V, state, Val{:right})
-    _passthrough_triu(state.U, state, Val{:right})    
+    i = idx(state.V)
+    if i <= state.ctrs.tr
+        copy!(state.Vt, state.V)
+        copy!(state.Ut, state.U)    
+    
+        turnover(state.B[i],    state.B[i+1], state.Vt, Val{:right})
+        turnover(state.B[i-1],  state.B[i],   state.Ut, Val{:right})
+        for k in -1:1
+            a,b = vals(state.B[i+k])
+            vals!(state.Ct[i+k], a, -b) # using copy!(Ct, B')  for i-1,i,i+1 is slower
+        end
+    else
+        _passthrough_triu(state.V, state, Val{:right})
+        _passthrough_triu(state.U, state, Val{:right})
+    end
 end
 
 function passthrough_triu{T, Tw}(state::FactorizationType{T, Val{:DoubleShift}, Val{:NoPencil}, Tw}, ::Type{Val{:left}})
@@ -222,7 +233,6 @@ end
 function _passthrough_triu{T, St, Tw}(U::Rotator, state::FactorizationType{T, St, Val{:NoPencil}, Tw}, ::Type{Val{:right}})
 
     i = idx(U)
-
     turnover(state.B[i], state.B[i+1], U, Val{:right})
     turnover(state.Ct[i+1], state.Ct[i], U, Val{:right})
     
@@ -329,11 +339,8 @@ function passthrough_Q{T,P}(state::FactorizationType{T, Val{:DoubleShift}, P, Va
         i += 1 # after turnover, U moves down
         fuse(state.W, state.U, Val{:right})
         
-        # pass U through triangle (Wait, this need abstracting XXX for pencil case)
+        # pass U through triangle then fuse
         AMVW._passthrough_triu(state.U, state, Val{:right})
-#        turnover(state.B[i], state.B[i+1], state.U, Val{:right})
-#        turnover(state.Ct[i+1], state.Ct[i], state.U, Val{:right})
-
         dflip(state.U, p)
         fuse(state.Q[i], state.U, Val{:left})
         

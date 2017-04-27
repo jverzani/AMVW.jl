@@ -9,9 +9,6 @@
 ## we pass in ps = [-p1, -p2, ..., -pn, -1] the whol column including 1
 ## We can leave as Ct * B * D or D * Ct * B (the default)
 ##
-## XXX -- user should not have to worry about use of `par` and `par * one(T)` for last two terms
-## should do this here, not in the `decompose` functions
-##
 function R_factorization{T}(ps::Vector{Complex{T}}, Ct, B, side=Val{:left})
 
     N = length(ps) - 1 # ps has 1 in it?
@@ -70,79 +67,70 @@ function R_factorization{T <: Real}(ps::Vector{T}, Ct, B, side=Val{:not_applicab
 end
 
 
-function Q_factorization{T, P}(state::FactorizationType{T, Val{:SingleShift}, P, Val{:NotTwisted}})
+function Q_factorization{T, St, P, Tw}(state::FactorizationType{T, St, P, Tw})
     N = state.N
     Q = state.Q
+    S = St == Val{:SingleShift} ? Complex{T} : T # type of cosine term in rotator
     for ii = 1:(N-1)
-        vals!(Q[ii], zero(Complex{T}), one(T))
+        vals!(Q[ii], zero(S), one(T))
         idx!(Q[ii], ii)
     end
-    vals!(Q[N], one(Complex{T}), zero(T)) #I
-    idx!(Q[N], N)
-end
-
-function Q_factorization{T, P}(state::FactorizationType{T, Val{:DoubleShift}, P, Val{:NotTwisted}})
-    N = state.N
-    Q = state.Q
-    for ii = 1:(N-1)
-        vals!(Q[ii], zero(T), one(T))
-        idx!(Q[ii], ii)
-    end
-    vals!(Q[N], one(T), zero(T))  # I
+    vals!(Q[N], one(S), zero(T)) #I
     idx!(Q[N], N)
 end
 
 
-## Init State
-function init_state{T, St, P, Tw}(state::FactorizationType{T, St, P, Tw}, decompose)
+## Init State uses factorization of R and Q above
+function init_state{T, St, P}(state::FactorizationType{T, St, P, Val{:NotTwisted}}, decompose)
+    # (Q,D, sigma)
+    # Ct, B [Ct1, B1]
+    init_triu(state, decompose)
+    Q_factorization(state)
+end
+
+
+function init_state{T, St, P}(state::FactorizationType{T, St, P, Val{:IsTwisted}}, decompose)
     # (Q,D, sigma)
     # Ct, B [Ct1, B1]
     alpha = init_triu(state, decompose)
-    init_Q(state, alpha)
-
-end
-
-
-function init_triu{T, ST, Tw}(state::FactorizationType{T, ST, Val{:NoPencil}, Tw}, decompose)
-    # fill out Ct, B, pass back alpha
-    ## We need to do something here with POLY!
-    ps = decompose(state.POLY)
-    #XXX    alpha =  R_factorization(ps, state.Ct, state.B)
-    
-    alpha =  R_factorization(ps, state.Ct, state.B)    
-    alpha
-end
-
-# Here we have V = D Ct B; W = D1 Ct1 B1
-function init_triu{T, St, Tw}(state::FactorizationType{T, St, Val{:HasPencil}, Tw}, decompose)
-
-    ps, qs = decompose(state.POLY)
-    beta =  R_factorization(qs, state.Ct1, state.B1)
-    
-    ## if SingleShift, we need to stash beta into D1:
-    if St == Val{:SingleShift}
-        state.D1[state.N] = beta
-        state.D1[state.N+1] = conj(beta)
-    end
-    
-    alpha =  R_factorization(ps, state.Ct, state.B)
-    alpha
-end
-
-
-
-function init_Q{T, P}(state::FactorizationType{T, Val{:SingleShift}, P, Val{:NotTwisted}}, alpha)
-    # define Q, D
     Q_factorization(state)
+    ## XXX ... Need to twist the Q here .... XXXX
+
+end
+
+## Upper triangular piecies R and (V,W)
+## populate (D,Ct,B)
+function init_triu{T, Tw}(state::FactorizationType{T, Val{:SingleShift}, Val{:NoPencil}, Tw}, decompose)
+    ps = decompose(state.POLY)
+    alpha =  R_factorization(ps, state.Ct, state.B)
     state.D[state.N] = alpha
     state.D[state.N+1] = conj(alpha)
 end
 
-function init_Q{T, P}(state::FactorizationType{T, Val{:DoubleShift}, P, Val{:NotTwisted}}, alpha)
-    # define Q, no D
-    Q_factorization(state)
+function init_triu{T, Tw}(state::FactorizationType{T, Val{:DoubleShift}, Val{:NoPencil}, Tw}, decompose)
+    ps = decompose(state.POLY)
+    alpha =  R_factorization(ps, state.Ct, state.B)
 end
 
+# Here we have V = D Ct B; W = D1 Ct1 B1
+function init_triu{T, Tw}(state::FactorizationType{T, Val{:SingleShift}, Val{:HasPencil}, Tw}, decompose)
+
+    ps, qs = decompose(state.POLY)
+    beta =  R_factorization(qs, state.Ct1, state.B1)
+    state.D1[state.N] = beta
+    state.D1[state.N+1] = conj(beta)
+    
+    alpha =  R_factorization(ps, state.Ct, state.B)
+    state.D[state.N] = alpha
+    state.D[state.N+1] = conj(alpha)
+end
+
+# Here we have V = D Ct B; W = D1 Ct1 B1
+function init_triu{T, Tw}(state::FactorizationType{T, Val{:DoubleShift}, Val{:HasPencil}, Tw}, decompose)
+    ps, qs = decompose(state.POLY)
+    beta =  R_factorization(qs, state.Ct1, state.B1)
+    alpha =  R_factorization(ps, state.Ct, state.B)
+end
 
 
 

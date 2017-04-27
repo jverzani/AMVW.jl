@@ -183,14 +183,13 @@ V::RealRotator{T}
 Vt::RealRotator{T}
 W::RealRotator{T}
 A::Matrix{T}    # for parts of A = QR
-Bk::Matrix{T}   # for diagonal block
 R::Matrix{T}    # temp storage, sometimes R part of QR
 e1::Vector{T}   # eigen values e1, e2
 e2::Vector{T}
 ctrs::AMVW_Counter
 end
 
-function Base.convert{T}(::Type{FactorizationType{T, Val{:DoubleShift}, Val{:NoPencil}, Val{:NotTwisted}}}, ps::Vector{T})
+function Base.convert{T <: AbstractFloat}(::Type{FactorizationType{T, Val{:DoubleShift}, Val{:NoPencil}, Val{:NotTwisted}}}, ps::Vector{T})
 
     N = length(ps) - 1
 
@@ -199,10 +198,10 @@ function Base.convert{T}(::Type{FactorizationType{T, Val{:DoubleShift}, Val{:NoP
                                          _ones(RealRotator{T}, N), #Ct
                                          _ones(RealRotator{T}, N), #B
                                          zeros(T, N),  zeros(T, N), #EIGS
-                                         one(RealRotator{T}), one(RealRotator{T}),
-                                         one(RealRotator{T}), one(RealRotator{T}),
-    one(RealRotator{T}), #U,U',V,V',W
-    zeros(T, 2, 2),zeros(T, 3, 2),zeros(T, 3, 2), # A Bk R
+                                         one(RealRotator{T}), one(RealRotator{T}), #U, Ut
+                                         one(RealRotator{T}), one(RealRotator{T}), #V, Vt
+    one(RealRotator{T}), # W
+    zeros(T, 2, 2),zeros(T, 3, 2), # A, R
     zeros(T,2), zeros(T,2),
     AMVW_Counter(0,1,N-1, 0, N-2)
     )
@@ -226,7 +225,6 @@ IEIGS::Vector{T}
 U::ComplexRealRotator{T}
 Ut::ComplexRealRotator{T}
 A::Matrix{Complex{T}}    # for parts of A = QR
-Bk::Matrix{Complex{T}}   # for diagonal block
 R::Matrix{Complex{T}}    # temp storage, sometimes R part of QR
 e1::Vector{T}   # eigen values e1, e2, store as (re,imag)
 e2::Vector{T}
@@ -245,8 +243,7 @@ function Base.convert{T}(::Type{FactorizationType{T, Val{:SingleShift}, Val{:NoP
                            _ones(ComplexRealRotator{T}, N), #B
                            zeros(T, N),  zeros(T, N), #EIGS
     one(ComplexRealRotator{T}), one(ComplexRealRotator{T}), #U, Ut
-    zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
-    zeros(Complex{T}, 3, 2), # A Bk R
+    zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2), # A R
     zeros(T,2), zeros(T,2),
     #    true,  # true for Wilkinson, false for Rayleigh.Make adjustable!
     ray,
@@ -281,7 +278,6 @@ Vt::RealRotator{T}
 W::RealRotator{T}
 #
 A::Matrix{T}    # for parts of A = QR
-Bk::Matrix{T}   # for diagonal block
 R::Matrix{T}    # temp storage, sometimes R part of QR
 e1::Vector{T}   # eigen values e1, e2
 e2::Vector{T}
@@ -302,7 +298,7 @@ function Base.convert{T}(::Type{FactorizationType{T, Val{:DoubleShift}, Val{:Has
     one(RealRotator{T}), one(RealRotator{T}),
     one(RealRotator{T}), one(RealRotator{T}),
     one(RealRotator{T}), #U,U',V,V',W
-    zeros(T, 2, 2),zeros(T, 3, 2),zeros(T, 3, 2), # A Bk R
+    zeros(T, 2, 2), zeros(T, 3, 2), # A R
     zeros(T,2), zeros(T,2),
     AMVW_Counter(0,1,N-1, 0, N-2)
     )
@@ -331,7 +327,6 @@ U::ComplexRealRotator{T}
 Ut::ComplexRealRotator{T}
 #
 A::Matrix{Complex{T}}    # for parts of A = QR
-Bk::Matrix{Complex{T}}   # for diagonal block
 R::Matrix{Complex{T}}    # temp storage, sometimes R part of QR
 e1::Vector{T}   # eigen values e1, e2, store as (re,imag)
 e2::Vector{T}
@@ -354,8 +349,7 @@ function Base.convert{T}(::Type{FactorizationType{T, Val{:SingleShift}, Val{:Has
     _ones(ComplexRealRotator{T}, N), #B1
     zeros(T, N),  zeros(T, N), #EIGS
     one(ComplexRealRotator{T}), one(ComplexRealRotator{T}), #U, Ut
-    zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2),
-    zeros(Complex{T}, 3, 2), # A Bk R
+    zeros(Complex{T}, 2, 2),zeros(Complex{T}, 3, 2), # A , R
     zeros(T,2), zeros(T,2),
     #    true,  # true for Wilkinson, false for Rayleigh.Make adjustable!
     ray,

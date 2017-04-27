@@ -1,9 +1,4 @@
-# D values are only for ComplexRealSingleShift
-#getD(state::ComplexRealSingleShift, k::Int) = state.D[k]
-#getD{T}(state::ShiftType{T}, k::Int) = one(T)
-
-
-### Related to decompostion QR into QC(B + ...)
+### Related to decompostion QR into QC(B + e_1 y^t)
 
 
 ## we need to find A[k:k+2, k:k+1] for purposes of computing eigenvalues, either
@@ -13,9 +8,8 @@
 ## updates state.A
 ##
 # We look for r_j,k. Depending on |j-k| there are different amounts of work
-# we have wk = (B + e1 y^t) * ek = B * ek + e1 yk; we consider B* ek only B1 ... Bk D ek applies
+# Following paper, we have wk = (B + e1 y^t) * ek = B * ek + e1 yk; we consider B* ek only B1 ... Bk D ek applies
 #
-
 # julia> Bi*Bj*Bk * [0,0,1,0]
 # julia> rotm(bi1, bi2, 1, 4) * rotm(bj1, bj2, 2, 4) * rotm(bk1, bk2, 3, 4) * [0,0,1,0]
 # 4-element Array{SymPy.Sym,1}
@@ -86,111 +80,105 @@
 # precision for, say, Wilknson(20)
 #
 
-# R = Ct* B
+# R = Ct * B
 # This finds R[(k-2):k,(k-1):k] from C and B,
-# If D is necessary, it must be done separately. (We put into getindex)
+# If D is necessary, it must be done separately. 
 # Here k-2 <= j <= k
-function Rjk(Ct, B, j, k)
-    delta = k -j
-    delta < 0 && return 0
-    0 <= delta <= 2 || error("k-j in 0,1,2")
-
-    if delta == 0 # (k,k) case is easiest
+function Rjk(Ct, B, j, k)    
+    # delta = k - j
+    #    0 <= delta <= 2 || error("k-j in 0,1,2")
+    if k - j == 0 # (k,k) case is easiest
         # rkk = -w_{k+1} / ck_s
         wl = B[k].s
         return -wl / Ct[k].s
-    elseif delta == 1
+    elseif k - j == 1
         j = k-1
         # r_{k-1,k} =  -(wk + cj_c * conj(ck_c) / ck_s *wl)/cj_s
         wl = B[k].s
         wk = conj(B[j].c) * B[k].c
         return -(wk + Ct[j].c * conj(Ct[k].c) / Ct[k].s * wl) / Ct[j].s
-    else
+    else#if k - j == 2
         i,j = k-2, k-1
         wl = B[k].s
         wk = conj(B[j].c) * B[k].c
         wj = - conj(B[i].c) * conj(B[j].s) * B[k].c
         # -(wj + ci_c * conj(cj_c) / cj_s * wk + ci_c * conj(ck_c) / (cj_s * ck_s) * wl)/ci_s
-        return -(wj + Ct[i].c * conj(Ct[j].c) / Ct[j].s * wk +
-                 Ct[i].c * conj(Ct[k].c) / (Ct[j].s * Ct[k].s) * wl) / Ct[i].s
+        return  -(wj + Ct[i].c * conj(Ct[j].c) / Ct[j].s * wk +
+                   Ct[i].c * conj(Ct[k].c) / (Ct[j].s * Ct[k].s) * wl) / Ct[i].s
     end
 end
 
 
-# Simple type to help with getting elements of R
-abstract type RType end
-type RTypeDouble <: RType
-    Ct
-    B
-end
-type RTypeSingle <: RType
-    Ct
-    B
-    D
-end
 
-Base.getindex(a::RTypeDouble, j, k) = Rjk(a.Ct, a.B, j, k)
-Base.getindex(a::RTypeSingle, j, k) = a.D[j] * Rjk(a.Ct, a.B, j, k)
+
+# allows treatment of complex and real case at same time
+getD{T, P, Tw}(state::FactorizationType{T, Val{:SingleShift}, P, Tw}, k) = state.D[k]
+getD{T, P, Tw}(state::FactorizationType{T, Val{:DoubleShift}, P, Tw}, k) = one(T)
+getD1{T, P, Tw}(state::FactorizationType{T, Val{:SingleShift}, P, Tw}, k) = state.D1[k]
+getD1{T, P, Tw}(state::FactorizationType{T, Val{:DoubleShift}, P, Tw}, k) = one(T)
+
 
 function diagonal_block{T, St, Tw}(state::FactorizationType{T, St, Val{:NoPencil}, Tw}, k)
-    k >= 2 && k <= state.N || error("$k not in [2,n]")
-
-    R = state.R # temp storage
-
-    Q,Ct,B = state.Q, state.Ct, state.B
-    
-    V = St == Val{:SingleShift} ? RTypeSingle(state.Ct, state.B, state.D) : RTypeDouble(state.Ct, state.B)
-    
+#    k >= 2 && k <= state.N || error("$k not in [2,n]")
+    const ZERO = St == Val{:SingleShift} ? zero(Complex{T}) : zero(T)
     if k == 2
-        for i in 1:2, j in 1:2
-            R[i,j] = V[i,j]
-        end
+        state.R[1,1] = getD(state,1) * Rjk(state.Ct, state.B, 1, 1)
+        state.R[1,2] = getD(state,1) * Rjk(state.Ct, state.B, 1, 2)
+        state.R[2,1] = ZERO
+        state.R[2,2] = getD(state,2) * Rjk(state.Ct, state.B, 2, 2)        
     else
-        for i in 1:3, j in 1:2
-            R[i,j] = V[k - 3 + i, k - 2 + j]
-        end
+        state.R[1,1] = getD(state,k-2) * Rjk(state.Ct, state.B, k-2, k-1)
+        state.R[1,2] = getD(state,k-2) * Rjk(state.Ct, state.B, k-2, k)
+        state.R[2,1] = getD(state,k-1) * Rjk(state.Ct, state.B, k-1, k-1)
+        state.R[2,2] = getD(state,k-1) * Rjk(state.Ct, state.B, k-1, k)        
+        state.R[3,1] = ZERO
+        state.R[3,2] = getD(state,k) * Rjk(state.Ct, state.B, k, k)        
     end
 
-    compute_QR(state, R, k)
+    compute_QR(state, state.R, k)
 
     false 
-end
-## Has pencil!!
 
+
+end
+
+
+## For pencil case there are two triangular matrices. This recovers the key parts from each
+## then combines. We find V, W then form W * inv(W). The combination is following this:
 # julia> s = VWi[2:4, 3:4]
 # 3×2 Array{SymPy.Sym,2}:
 #  v23/W33 - W23*v22/(W22*W33)  v24/W44 - W34*v23/(W33*W44) + v22*(W23*W34/(W33*W44) - W24/W44)/W22
 #                      v33/W33                                          v34/W44 - W34*v33/(W33*W44)
 #                            0                                                              v44/W44
-
-
 function diagonal_block{T, St, Tw}(state::FactorizationType{T, St, Val{:HasPencil}, Tw}, k)
 
     k >= 2 && k <= state.N || error("$k not in [2,n]")
 
     R = state.R # temp storage
 
-    W = St == Val{:SingleShift} ? RTypeSingle(state.Ct1, state.B1, state.D1) : RTypeDouble(state.Ct1, state.B1)    
-    V = St == Val{:SingleShift} ? RTypeSingle(state.Ct, state.B, state.D) : RTypeDouble(state.Ct, state.B)
 
-
+    i, j = k-2, k-1
+    Vjj, Wjj =  getD(state,j) * Rjk(state.Ct, state.B, j,j), getD1(state,j) * Rjk(state.Ct1, state.B1, j,j)
+    Vjk, Wjk =  getD(state,j) * Rjk(state.Ct, state.B, j,k), getD1(state,j) * Rjk(state.Ct1, state.B1, j,k)
+    Vkk, Wkk =  getD(state,k) * Rjk(state.Ct, state.B, k,k), getD1(state,k) * Rjk(state.Ct1, state.B1, k,k)
 
     if k == 2
-        j = k - 1
-        R[1,1] = V[j,j] / W[j,j]
-        R[1,2] = V[j,k]/W[k,k] - W[j,k]*V[j,j] / (W[j,j]*W[k,k])
+        R[1,1] = Vjj / Wjj
+        R[1,2] = Vjk/Wkk - Wjk*Vjj / (Wjj*Wkk)
         R[2,1] = zero(T)
-        R[2,2] = V[k,k] / W[k,k]
+        R[2,2] = Vkk / Wkk
 
     else
+        Vii, Wii =  getD(state,i) * Rjk(state.Ct, state.B, i,i), getD1(state,i) * Rjk(state.Ct1, state.B1, i,i)
+        Vij, Wij =  getD(state,i) * Rjk(state.Ct, state.B, i,j), getD1(state,i) * Rjk(state.Ct1, state.B1, i,j)
+        Vik, Wik =  getD(state,i) * Rjk(state.Ct, state.B, i,k), getD1(state,i) * Rjk(state.Ct1, state.B1, i,k)
         
-        i,j = k-2, k-1
-        R[1,1] = V[i,j]/W[j,j] - W[i,j] * V[i,i] / (W[i,i]*W[j,j])
-        R[1,2] = V[i,k]/W[k,k] - W[j,k] * V[i,j] / (W[j,j]*W[k,k]) + V[i,i] *(W[i,j]*W[j,k]/(W[i,i]*W[j,j]) - W[i,k]/W[k,k])/W[i,i]
-        R[2,1] = V[j,j] / W[j,j]
-        R[2,2] = V[j,k]/W[k,k] - W[j,k]*V[j,j] - W[j,k]*V[j,j] / (W[i,i]*W[j,j])
+        R[1,1] = Vij/Wjj - Wij * Vii / (Wii*Wjj)
+        R[1,2] = Vik/Wkk - Wjk * Vij / (Wjj*Wkk) + Vii *(Wij*Wjk/(Wii*Wjj) - Wik/Wkk)/Wii
+        R[2,1] = Vjj / Wjj
+        R[2,2] = Vjk/Wkk - Wjk*Vjj - Wjk*Vjj / (Wii*Wjj)
         R[3,1] = zero(T)
-        R[3,2] = V[k,k] / W[k,k]
+        R[3,2] = Vkk / Wkk
     end        
 
     # rotate by Q
@@ -201,15 +189,11 @@ function diagonal_block{T, St, Tw}(state::FactorizationType{T, St, Val{:HasPenci
 end
 
 
-
-# allows treatment of complex and real case at same time
-getD{T, P, Tw}(state::FactorizationType{T, Val{:SingleShift}, P, Tw}, k) = state.D[k]
-getD{T, P, Tw}(state::FactorizationType{T, Val{:DoubleShift}, P, Tw}, k) = one(T)
-
-## we compute R from Ct, B
-## we compute QR from R and Q [D],
+## we compute R from [D],Ct, B
+## we compute QR from R and Q.
 ## This allows us to handle twisting separately
 ## Pencil doesn't effect this code, that is the R part
+## This is just matrix multiplication written out.
 function compute_QR{T,St, P}(state::FactorizationType{T, St, P, Val{:NotTwisted}}, R, k)
     A = state.A
     Q = state.Q
@@ -261,6 +245,10 @@ end
 function compute_QR{T,St, P}(state::FactorizationType{T, St, P, Val{:IsTwisted}}, R, k)
     println("XXX need to do this ....")
 end
+
+
+
+
 
 ##################################################
 

@@ -147,7 +147,7 @@ function fuse{T}(a::ComplexRealRotator{T}, b::ComplexRealRotator{T}, ::Type{Val{
 end
 
 
-## Fuse for genera rotation
+## Fuse for general rotation
 ## We have two functions as it seems a bit faster
 fuse{T}(a::Rotator{T}, b::Rotator{T}, dir, d) = fuse(a,b,dir)
 
@@ -229,27 +229,26 @@ end
 
 
 
-function turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T},
-                     ::Type{Val{:right}})
+function turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T}, ::Type{Val{:right}})
 
     c4,s4,c5,s5,c6,s6 = _turnover(Q1,Q2,Q3)
     vals!(Q3, conj(c4), -s4)
     vals!(Q1, conj(c5), -s5)
     vals!(Q2, conj(c6), -s6)
     idx!(Q3, idx(Q2))  # misfit is right one
+    
 end
 
 turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T}) = turnover(Q1, Q2, Q3, Val{:right})
 
-function turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T},
-                     ::Type{Val{:left}})
+function turnover{T}(Q1::Rotator{T}, Q2::Rotator{T}, Q3::Rotator{T}, ::Type{Val{:left}})
     
     c4,s4,c5,s5,c6,s6 = _turnover(Q1,Q2,Q3)
-    
     vals!(Q2, conj(c4), -s4)
     vals!(Q3, conj(c5), -s5)
     vals!(Q1, conj(c6), -s6)
     idx!(Q1, idx(Q2))   # misfit is left one
+
 end
 
 
